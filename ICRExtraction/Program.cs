@@ -17,8 +17,12 @@ namespace ICRExtraction
 
 			var image = new Mat("form12.png", ImreadModes.GrayScale);
 			
-			Cv2.AdaptiveThreshold(image, image, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, 7, 2);
+			Cv2.AdaptiveThreshold(image, image, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, 7, 2);
+
 			Cv2.BitwiseNot(image, image);
+
+			Cv2.Blur(image, image, new Size(1, 2));
+			Cv2.Threshold(image, image, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
 
 			// If it's a scan, it can fix missing ink.
 			//var element = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(2,2));
@@ -39,9 +43,10 @@ namespace ICRExtraction
 			for (int i = 1; i < nbComponents; i++)
 			{
 				// We must determine if it "may" be an interesting blob.
-				if (Determine(labels, i))
+				int[,] outputImg = null;
+				if (Determine(labels, i, out outputImg))
 				{
-					var img = CreateImage(labels, i);
+					var img = CreateImage(outputImg, i);
 					Cv2.BitwiseOr(newImage, img, newImage);
 				}
 			}
@@ -55,20 +60,23 @@ namespace ICRExtraction
 			}
 		}
 
-		private static bool Determine(int[,] labels, int key)
+		private static bool Determine(int[,] labels, int key, out int[,] outputImg)
 		{
 			var row = labels.GetLength(0);
 			var col = labels.GetLength(1);
+			outputImg = new int[row, col];
 
-			int height = 5;
-			int width = 20;
+			int height = 10;
+			int width = 10;
 
 			List<int> listX = new List<int>();
-
+			
 			for (int y = 0; y < row; y++)
 			{
 				for (int x = 0; x < col; x++)
 				{
+					var added = false;
+
 					var val = labels[y, x];
 
 					if (key == val)
@@ -87,7 +95,20 @@ namespace ICRExtraction
 							}
 						}
 
-						if (numTop > height)
+						int numBottom = 0;
+						for (int yy = y; yy < row; yy++)
+						{
+							if (labels[yy, x] == val)
+							{
+								numBottom++;
+							}
+							else
+							{
+								break;
+							}
+						}
+						
+						if (numTop > height || numBottom > height)
 						{
 							// Let's explore the right direction.
 							int numRight = 0;
@@ -103,8 +124,10 @@ namespace ICRExtraction
 								}
 							}
 
+							int numLeft = 0;
 							if (numRight > width)
 							{
+								added = true;
 								if (!listX.Contains(x))
 								{
 									listX.Add(x);
@@ -113,7 +136,6 @@ namespace ICRExtraction
 							else
 							{
 								// Let's explore the left direction.
-								int numLeft = 0;
 								for (int xx = x; xx >= 0; xx--)
 								{
 									if (labels[y, xx] == val)
@@ -128,11 +150,28 @@ namespace ICRExtraction
 
 								if (numLeft > width)
 								{
+									added = true;
 									if (!listX.Contains(x))
 									{
 										listX.Add(x);
 									}
 								}
+							}
+
+							if (added)
+							{
+								for (int i = 0; i < numTop; i++)
+									if (labels[y - i, x] == val)
+										outputImg[y - i, x] = val;
+								for (int i = 0; i < numBottom; i++)
+									if (labels[y + i, x] == val)
+										outputImg[y + i, x] = val;
+								for (int i = 0; i < numRight; i++)
+									if (labels[y, x + i] == val)
+										outputImg[y, x + i] = val;
+								for (int i = 0; i < numLeft; i++)
+									if (labels[y, x - i] == val)
+										outputImg[y, x - i] = val;
 							}
 						}
 					}
@@ -172,7 +211,7 @@ namespace ICRExtraction
 
 								int dist = Math.Abs(x + gap - curX);
 
-								if (dist <= 3)
+								if (dist <= 2)
 								{
 									indexNextElement = iNext;
 									numElements++;
@@ -188,9 +227,9 @@ namespace ICRExtraction
 								remainingListX.Clear();
 							}
 						}
-						if (numElements > 2)
+						if (numElements > 4)
 						{
-							if (maxElements < numElements && gap > 5 /* && gap < 30*/)
+							if (maxElements < numElements && gap > 10 /* && gap < 30*/)
 							{
 								maxElements = numElements;
 								finalGap = gap;
