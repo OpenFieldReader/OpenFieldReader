@@ -41,7 +41,7 @@ namespace ICRExtraction
 			var image = new Mat(filename, ImreadModes.GrayScale);
 			
 			Cv2.AdaptiveThreshold(image, image, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, 9, 2);
-
+			
 			/*using (new Window("dst image", image))
 			{
 				Cv2.WaitKey();
@@ -56,7 +56,6 @@ namespace ICRExtraction
 			}
 			
 			Cv2.BitwiseNot(image, image);
-
 			Cv2.Blur(image, image, new Size(1, 2));
 			Cv2.Threshold(image, image, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
 			
@@ -70,14 +69,20 @@ namespace ICRExtraction
 
 			// We must determine if it "may" be an interesting blob.
 			int[,] outputImg = null;
+
+			Stopwatch watch = new Stopwatch();
+			watch.Start();
 			var hasBoxes = HasBoxes(indexer, row, col, out outputImg, options);
+			watch.Stop();
+			Console.WriteLine("Duration: " + watch.Elapsed);
 			
 			if (hasBoxes)
 			{
 				var img = CreateImage(outputImg, hasColor: true);
 				Cv2.BitwiseOr(newImage, img, newImage);
 			}
-			
+
+
 			// Preview
 			if (hasBoxes && image.Width != 0)
 			{
@@ -171,6 +176,8 @@ namespace ICRExtraction
 			int width = options.JunctionWidth;
 			int height = options.JunctionHeight;
 
+			// Cache per line speed up the creation of various cache.
+			Dictionary<int, List<Junction>> cacheListJunctionPerLine = new Dictionary<int, List<Junction>>();
 			List<Junction> listJunction = new List<Junction>();
 
 			// If there is too much junction near each other, maybe it's just a black spot.
@@ -200,6 +207,11 @@ namespace ICRExtraction
 						{
 							if (proximityCounter < maxProximity)
 							{
+								if (!cacheListJunctionPerLine.ContainsKey(y))
+								{
+									cacheListJunctionPerLine.Add(y, new List<Junction>());
+								}
+								cacheListJunctionPerLine[y].AddRange(listJunctionX);
 								listJunction.AddRange(listJunctionX);
 								listJunctionX.Clear();
 							}
@@ -213,7 +225,14 @@ namespace ICRExtraction
 				}
 
 				if (proximityCounter < maxProximity && listJunctionX != null)
+				{
+					if (!cacheListJunctionPerLine.ContainsKey(y))
+					{
+						cacheListJunctionPerLine.Add(y, new List<Junction>());
+					}
+					cacheListJunctionPerLine[y].AddRange(listJunctionX);
 					listJunction.AddRange(listJunctionX);
+				}
 			}
 
 			Console.WriteLine("Junction.count: " + listJunction.Count);
@@ -232,41 +251,82 @@ namespace ICRExtraction
 			// Some forms contains image in the footer and it prevents extra processing.
 
 			// TODO: add parameter
-			int pagePercentToConsider = 100;
+			/*int pagePercentToConsider = 100;
 			int maxRow = row * pagePercentToConsider / 100;
-			listJunction = listJunction.Where(m => m.Y < maxRow).ToList();
+			listJunction = listJunction.Where(m => m.Y < maxRow).ToList();*/
 
 			// Let's check the list of points.
-			
+
 			// Search near same line.
+
+			// Prepare cache to speedup searching algo.
 			Dictionary<Junction, List<Junction>> cacheNearJunction = new Dictionary<Junction, List<Junction>>();
-			int maxY = 3;
-			int maxX = 60;
-			foreach (var junction in listJunction)
+			Dictionary<Junction, List<Junction>> cachePossibleNextJunctionRight = new Dictionary<Junction, List<Junction>>();
+			Dictionary<Junction, List<Junction>> cachePossibleNextJunctionLeft = new Dictionary<Junction, List<Junction>>();
+			int minX = 10;
+			int maxX = 70;
+			foreach (var junction in cacheListJunctionPerLine.SelectMany(m => m.Value))
 			{
-				cacheNearJunction.Add(junction, listJunction.Where(m => Math.Abs(m.Y - junction.Y) <= maxY && Math.Abs(m.X - junction.X) <= maxX).ToList());
+				var listJunctionNearJunction = new List<Junction>();
+
+				if (cacheListJunctionPerLine.ContainsKey(junction.Y - 3))
+					listJunctionNearJunction.AddRange(cacheListJunctionPerLine[junction.Y - 3]);
+				if (cacheListJunctionPerLine.ContainsKey(junction.Y - 2))
+					listJunctionNearJunction.AddRange(cacheListJunctionPerLine[junction.Y - 2]);
+				if (cacheListJunctionPerLine.ContainsKey(junction.Y - 1))
+					listJunctionNearJunction.AddRange(cacheListJunctionPerLine[junction.Y - 1]);
+				if (cacheListJunctionPerLine.ContainsKey(junction.Y - 0))
+					listJunctionNearJunction.AddRange(cacheListJunctionPerLine[junction.Y - 0]);
+				if (cacheListJunctionPerLine.ContainsKey(junction.Y + 1))
+					listJunctionNearJunction.AddRange(cacheListJunctionPerLine[junction.Y + 1]);
+				if (cacheListJunctionPerLine.ContainsKey(junction.Y + 2))
+					listJunctionNearJunction.AddRange(cacheListJunctionPerLine[junction.Y + 2]);
+				if (cacheListJunctionPerLine.ContainsKey(junction.Y + 3))
+					listJunctionNearJunction.AddRange(cacheListJunctionPerLine[junction.Y + 3]);
+				
+				var list = listJunctionNearJunction
+					.Where(m =>
+						Math.Abs(m.X - junction.X) <= maxX
+						)
+					.ToList();
+				
+				cacheNearJunction.Add(junction, list);
+
+				var possibleNextJunction = list
+					.Where(m =>
+						Math.Abs(m.X - junction.X) >= minX
+						)
+					.ToList();
+
+				cachePossibleNextJunctionLeft.Add(junction, possibleNextJunction.Where(m => m.X < junction.X).ToList());
+				cachePossibleNextJunctionRight.Add(junction, possibleNextJunction.Where(m => m.X > junction.X).ToList());
 			}
 
 			int numSol = 0;
+			
+			List<List<Junction>> possibleSol = new List<List<Junction>>();
 
 			listJunction = listJunction.OrderBy(m => m.Y).ToList();
 
-			List<List<Junction>> possibleSol = new List<List<Junction>>();
 			while (listJunction.Any())
 			{
 				var start = listJunction[0];
 				listJunction.RemoveAt(0);
 
 				List<List<Junction>> listSolutions = new List<List<Junction>>();
-				for (int iGap = 0; iGap < listJunction.Count; iGap++)
+				var junctionsForGap = cacheNearJunction[start];
+				
+				for (int iGap = 0; iGap < junctionsForGap.Count; iGap++)
 				{
-					var gap = listJunction[iGap];
+					var gap = junctionsForGap[iGap];
 
+					// Useless because it's already done with: cacheNearJunction.
+					/*
 					var gapY = Math.Abs(gap.Y - start.Y);
 					if (gapY > 2)
 					{
 						continue;
-					}
+					}*/
 
 					var gapX = Math.Abs(gap.X - start.X);
 					if (gapX <= 10 || gapX > 50)
@@ -276,10 +336,10 @@ namespace ICRExtraction
 
 					List<Junction> curSolution = new List<Junction>();
 					curSolution.Add(start);
-
-					int numElementsRight = FindElementsOnDirection(cacheNearJunction, start, gap, gapX, curSolution);
-					int numElementsLeft = FindElementsOnDirection(cacheNearJunction, start, gap, -gapX, curSolution);
-
+					
+					int numElementsRight = FindElementsOnDirection(cachePossibleNextJunctionRight, start, gap, gapX, curSolution);
+					int numElementsLeft = FindElementsOnDirection(cachePossibleNextJunctionLeft, start, gap, -gapX, curSolution);
+					
 					int numElements = numElementsLeft + numElementsRight;
 
 					if (numElements > 4)
@@ -289,7 +349,7 @@ namespace ICRExtraction
 							Console.WriteLine(numSol + " : Found ");
 
 						// TODO: add a parameter.
-						if (numSol == 30000)
+						if (numSol == 300000)
 						{
 							// Something wrong happen. Too much solution for now.
 							// If we continue, we would spend too much time processing the image.
@@ -301,19 +361,23 @@ namespace ICRExtraction
 					}
 				}
 
-				var bestSol = listSolutions.OrderByDescending(m => m.Count).FirstOrDefault();
+				List<Junction> bestSol = listSolutions.OrderByDescending(m => m.Count).FirstOrDefault();
 
 				if (bestSol != null)
 				{
-					foreach (var item in bestSol)
+					// Too slow. (faster if we skip removal)
+					// But, we have more solutions.
+					/*foreach (var item in bestSol)
 					{
 						listJunction.Remove(item);
-					}
+					}*/
+
 					possibleSol.Add(bestSol);
 				}
 			}
 
-			Console.WriteLine(numSol + " : Found ");
+			Console.WriteLine(numSol + " : Solution found");
+			Console.WriteLine(possibleSol.Count + " Best solution found");
 
 			// Let's merge near junctions. (vertical line)
 			// We assign a group id for each clusters.
@@ -361,6 +425,12 @@ namespace ICRExtraction
 				.SelectMany(m => m)
 				.GroupBy(m => m.GroupId)
 				.ToDictionary(m => m.Key, m => m.ToList());
+			
+			/*foreach (var junction in junctionsPerGroup.SelectMany(m => m.Value))
+			{
+				DrawJunction(outputImg, junction.GroupId, junction);
+			}
+			return true;*/
 
 			// Let's explore the clusters directions and try to interconnect clusters on the horizontal side.
 
@@ -368,7 +438,7 @@ namespace ICRExtraction
 			int minElementPercent = 50;
 
 			List<LineCluster> lineClusters = new List<LineCluster>();
-
+			
 			foreach (var item in junctionsPerGroup)
 			{
 				int groupId = item.Key;
@@ -379,11 +449,11 @@ namespace ICRExtraction
 				// Determine the general direction.
 				var top = junctions.Count(m => m.Top) > minElementDir;
 				var bottom = junctions.Count(m => m.Bottom) > minElementDir;
-
+				
 				junctions.ForEach(m => m.Top = top);
 				junctions.ForEach(m => m.Bottom = bottom);
 
-				for (int i = 0; i < junctions.Count; i++)
+				/*for (int i = 0; i < junctions.Count; i++)
 				{
 					var junction = junctions[i];
 					if (!junction.Bottom && !junction.Top)
@@ -391,7 +461,7 @@ namespace ICRExtraction
 						junctions.Remove(junction);
 						i--;
 					}
-				}
+				}*/
 
 				var x = (int)junctions.Average(m => m.X);
 				var y = (int)junctions.Average(m => m.Y);
@@ -519,9 +589,8 @@ namespace ICRExtraction
 					int curY = cur.Y;
 
 					int distX = Math.Abs(x + gapX - curX);
-					int distY = Math.Abs(y - curY);
 
-					if (distX <= 1 && distY <= 3)
+					if (distX <= 1)
 					{
 						indexNextElement = iNext;
 						iNext--;
@@ -538,7 +607,7 @@ namespace ICRExtraction
 				if (indexNextElement == -1)
 				{
 					// No element found.
-					remainingList.Clear();
+					return numElements;
 				}
 			}
 			return numElements;
