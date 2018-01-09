@@ -23,7 +23,7 @@ It's a great start. Some work need to be done to improve accuracy.
 We can see boxes, but I need to find a way to isolate each characters (and manage overlapping characters on 2 boxes)
 
 <p align="center">
-    <img alt="Example" src="PhotoExample.png" />
+    <img alt="Example" src="Photo.png" />
 </p>
 
 # Copyright and license
