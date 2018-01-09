@@ -23,11 +23,22 @@ namespace ICRExtraction
 				try
 				{
 					GC.Collect();
-					FormExtraction.ProcessImage(pathFile);
+					var result = FormExtraction.ProcessImage(pathFile);
+					var numGroup = 1;
+					foreach (var group in result.Boxes)
+					{
+						Console.WriteLine("\nGroup #" + numGroup);
+						foreach (var box in group)
+						{
+							Console.WriteLine(box.TopLeft + " " + box.TopRight + " " + box.BottomLeft + " " + box.BottomRight);
+						}
+						numGroup++;
+					}
 				}
 				catch (Exception ex)
 				{
 					Console.WriteLine("Something wrong happen: " + ex.Message);
+					Console.WriteLine(ex.StackTrace);
 				}
 			}
 

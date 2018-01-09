@@ -18,13 +18,14 @@ namespace ICRExtraction
 			public FormExtractionOptions()
 			{
 				ResizeWidth = 1500;
-				JunctionWidth = 25;
+				JunctionWidth = 30;
 				JunctionHeight = 15;
 			}
 		}
 
 		public class FormExtractionResult
 		{
+			public List<List<Box>> Boxes { get; set; }
 		}
 
 		public static FormExtractionResult ProcessImage(string filename, FormExtractionOptions options = null)
@@ -54,7 +55,8 @@ namespace ICRExtraction
 			}
 			
 			Cv2.BitwiseNot(image, image);
-			Cv2.Blur(image, image, new Size(1, 2));
+			Cv2.Dilate(image, image, Cv2.GetStructuringElement(MorphShapes.Cross, new Size(2, 2)));
+			//Cv2.Blur(image, image, new Size(1, 2));
 			Cv2.Threshold(image, image, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
 			
 			MatOfByte3 mat3 = new MatOfByte3(image);
@@ -70,20 +72,20 @@ namespace ICRExtraction
 
 			Stopwatch watch = new Stopwatch();
 			watch.Start();
-			var hasBoxes = HasBoxes(indexer, row, col, out outputImg, options);
+			var result = HasBoxes(indexer, row, col, out outputImg, options);
 			watch.Stop();
 			Console.WriteLine("Duration: " + watch.Elapsed);
 			
-			if (hasBoxes)
+			if (result.Boxes.Any())
 			{
 				var img = CreateImage(outputImg, hasColor: true);
 				Cv2.BitwiseOr(newImage, img, newImage);
 			}
 			
 			// Preview
-			if (hasBoxes && image.Width != 0)
+			if (result.Boxes.Any() && image.Width != 0)
 			{
-				Cv2.Dilate(newImage, newImage, Cv2.GetStructuringElement(MorphShapes.Cross, new Size(2, 2)));
+				//Cv2.Dilate(newImage, newImage, Cv2.GetStructuringElement(MorphShapes.Cross, new Size(2, 2)));
 				
 				Cv2.BitwiseNot(image, image);
 				int width = 400;
@@ -107,7 +109,7 @@ namespace ICRExtraction
 			newImage.Dispose();
 			mat3.Dispose();
 
-			return new FormExtractionResult();
+			return result;
 
 			//newImage.SaveImage("mask.png");
 
@@ -163,9 +165,18 @@ namespace ICRExtraction
 		{
 			public LineCluster TopLine { get; set; }
 			public LineCluster BottomLine { get; set; }
+			public double GapY { get; set; }
 		}
 
-		private static bool HasBoxes(MatIndexer<Vec3b> labels, int row, int col, out int[,] outputImg, FormExtractionOptions options)
+		public class Box
+		{
+			public Point TopLeft { get; set; }
+			public Point TopRight { get; set; }
+			public Point BottomLeft { get; set; }
+			public Point BottomRight { get; set; }
+		}
+
+		private static FormExtractionResult HasBoxes(MatIndexer<Vec3b> labels, int row, int col, out int[,] outputImg, FormExtractionOptions options)
 		{
 			// Debug image.
 			outputImg = new int[row, col];
@@ -249,7 +260,7 @@ namespace ICRExtraction
 				// Something wrong happen. Too much junction for now.
 				// If we continue, we would spend too much time processing the image.
 				// Let's suppose we don't know.
-				return false;
+				return new FormExtractionResult();
 			}
 
 			// We can skip the footer to focus on a particular part of the image.
@@ -357,7 +368,7 @@ namespace ICRExtraction
 							// Something wrong happen. Too much solution for now.
 							// If we continue, we would spend too much time processing the image.
 							// Let's suppose we don't know.
-							return false;
+							return new FormExtractionResult();
 						}
 						
 						numSol++;
@@ -480,6 +491,7 @@ namespace ICRExtraction
 			Dictionary<LineCluster, LineCluster> lineClustersTop = new Dictionary<LineCluster, LineCluster>();
 			Dictionary<LineCluster, LineCluster> lineClustersBottom = new Dictionary<LineCluster, LineCluster>();
 
+			// Merge top and bottom lines.
 			foreach (var itemA in lineClusters)
 			{
 				foreach (var itemB in lineClusters)
@@ -515,18 +527,20 @@ namespace ICRExtraction
 								int commonElementCounter = 0;
 
 								int minPercent = 90;
-								int min = Math.Min(topLine.Junctions.Count, bottomLine.Junctions.Count);
-								int minimumCommonElements = min * minPercent / 100;
+								int minCount = Math.Min(topLine.Junctions.Count, bottomLine.Junctions.Count);
+								int minimumCommonElements = minCount * minPercent / 100;
 
+								List<double> avgGapY = new List<double>();
 								foreach (var topJunction in topLine.Junctions)
 								{
-									var hasCommonElement = bottomLine.Junctions.Any(m =>
+									var commonElement = bottomLine.Junctions.Where(m =>
 										Math.Abs(topJunction.X - m.X) <= 5 &&
 										topJunction.Y - m.Y >= minGapY &&
 										topJunction.Y - m.Y <= maxGapY
 									);
-									if (hasCommonElement)
+									if (commonElement.Any())
 									{
+										avgGapY.Add(commonElement.Average(m => topJunction.Y - m.Y));
 										commonElementCounter++;
 
 										if (commonElementCounter >= minimumCommonElements)
@@ -542,7 +556,8 @@ namespace ICRExtraction
 									boxesClusters.Add(new BoxesCluster
 									{
 										TopLine = topLine,
-										BottomLine = bottomLine
+										BottomLine = bottomLine,
+										GapY = avgGapY.Average()
 									});
 
 									lineClustersTop.Add(topLine, topLine);
@@ -554,7 +569,107 @@ namespace ICRExtraction
 				}
 			}
 
-			nextGroupId = 0;
+			// We can now merge near junctions.
+			// We want to find the centroid in order to determine the boxes dimensions and position.
+			List<List<Box>> allBoxes = new List<List<Box>>();
+			foreach (var boxesCluster in boxesClusters)
+			{
+				// We will explore points horizontally.
+				var allPoints = boxesCluster.TopLine.Junctions.Union(boxesCluster.BottomLine.Junctions).Select(m => m.X)
+					.ToList();
+
+				var avgGapX = boxesCluster.TopLine.Junctions.Average(m => m.GapX);
+				var maxDist = 10;
+
+				// Sometime, there is missing points. We will interconnect the boxes.
+				List<Box> boxes = new List<Box>();
+				allBoxes.Add(boxes);
+				Box curBoxes = null;
+
+				while (allPoints.Any())
+				{
+					var listX = new List<int>();
+
+					var x = allPoints[0];
+					allPoints.RemoveAt(0);
+					listX.Add(x);
+					
+					// Remove near points.
+					for (int i = 1; i < allPoints.Count; i++)
+					{
+						var curX = allPoints[i];
+						if (Math.Abs(curX - x) < maxDist)
+						{
+							allPoints.RemoveAt(i);
+							i--;
+							listX.Add(curX);
+						}
+					}
+
+					var centroidX = listX.Average();
+
+					var topJunctions = boxesCluster.TopLine.Junctions.Where(m => Math.Abs(m.X - centroidX) < maxDist);
+					var bottomJunctions = boxesCluster.BottomLine.Junctions.Where(m => Math.Abs(m.X - centroidX) < maxDist);
+
+					Point? curPointTop = null;
+					Point? curPointBottom = null;
+
+					if (topJunctions.Any())
+					{
+						var curX = topJunctions.Average(m => m.X);
+						var curY = topJunctions.Average(m => m.Y);
+						curPointTop = new Point(curX, curY);
+					}
+
+					if (bottomJunctions.Any())
+					{
+						var curX = bottomJunctions.Average(m => m.X);
+						var curY = bottomJunctions.Average(m => m.Y);
+						curPointBottom = new Point(curX, curY);
+					}
+					
+					if (topJunctions.Any() != bottomJunctions.Any())
+					{
+						// We should try our best to correct the error.
+						// If we use boxesCluster.GapY we can estimate the point.
+						
+						if (!curPointTop.HasValue)
+							curPointTop = new Point(curPointBottom.Value.X, curPointBottom.Value.Y - boxesCluster.GapY);
+
+						if (!curPointBottom.HasValue)
+							curPointBottom = new Point(curPointTop.Value.X, curPointTop.Value.Y + boxesCluster.GapY);
+					}
+
+					if (!curPointTop.HasValue && !curPointBottom.HasValue)
+					{
+						// Really strange..
+						// Should not happen.
+
+						// TODO: better error handling...
+						throw new Exception("This should not happen. Please open an issue on GitHub with your image.");
+					}
+
+					if (curBoxes == null)
+					{
+						curBoxes = new Box();
+						curBoxes.TopLeft = curPointTop.Value;
+						curBoxes.BottomLeft = curPointBottom.Value;
+					}
+					else
+					{
+						curBoxes.TopRight = curPointTop.Value;
+						curBoxes.BottomRight = curPointBottom.Value;
+						boxes.Add(curBoxes);
+
+						// Prepare the next box. (may not be added)
+						curBoxes = new Box();
+						curBoxes.TopLeft = curPointTop.Value;
+						curBoxes.BottomLeft = curPointBottom.Value;
+					}
+				}
+			}
+
+			/*nextGroupId = 0;
 			foreach (var item in boxesClusters)
 			{
 				nextGroupId++;
@@ -569,10 +684,26 @@ namespace ICRExtraction
 				{
 					DrawJunction(outputImg, nextGroupId, junction);
 				}
+			}*/
+
+			int size = 5;
+			foreach (var item in allBoxes)
+			{
+				nextGroupId++;
+				foreach (var box in item)
+				{
+					DrawPoint(outputImg, nextGroupId, box.TopLeft.X, box.TopLeft.Y, size);
+					DrawPoint(outputImg, nextGroupId, box.TopRight.X, box.TopRight.Y, size);
+					DrawPoint(outputImg, nextGroupId, box.BottomLeft.X, box.BottomLeft.Y, size);
+					DrawPoint(outputImg, nextGroupId, box.BottomRight.X, box.BottomRight.Y, size);
+				}
 			}
 			
 			// TODO: returns boxes, debug info, etc.
-			return boxesClusters.Any();
+			return new FormExtractionResult
+			{
+				Boxes = allBoxes
+			};
 		}
 
 		private static void DrawPoint(int[,] outputImg, int colorCode, int x, int y, int size)
@@ -583,7 +714,13 @@ namespace ICRExtraction
 			
 			for (int i = 0; i < size; i++)
 				for (int j = 0; j < size; j++)
-					outputImg[y + i, x + j] = colorCode;
+				{
+					var curY = y + i;
+					var curX = x + j;
+
+					if (curX >= 0 && curY >= 0 && curX < outputImg.GetLength(1) && curY < outputImg.GetLength(0))
+						outputImg[y + i, x + j] = colorCode;
+				}
 		}
 
 		private static void DrawJunction(int[,] outputImg, int colorCode, Junction junction)
