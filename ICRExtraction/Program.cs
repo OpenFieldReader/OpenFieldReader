@@ -15,8 +15,8 @@ namespace ICRExtraction
 		{
 			var projectDir = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName;
 			var pathFiles = Directory.EnumerateFiles(projectDir + @"\Samples").ToList();
-
-			foreach (var pathFile in pathFiles)
+			
+			foreach (var pathFile in pathFiles.Where(m => m.Contains("form9")))
 			{
 				Console.WriteLine("Processing: " + Path.GetFileNameWithoutExtension(pathFile));
 
@@ -25,11 +25,12 @@ namespace ICRExtraction
 					GC.Collect();
 					FormExtraction.ProcessImage(pathFile);
 				}
-				catch
+				catch (Exception ex)
 				{
-					Console.WriteLine("Something wrong happen..");
+					Console.WriteLine("Something wrong happen: " + ex.Message);
 				}
 			}
+
 			Console.WriteLine("End");
 			Console.ReadLine();
 		}
