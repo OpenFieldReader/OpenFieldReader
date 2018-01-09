@@ -27,10 +27,10 @@ namespace ICRExtraction
 					var numGroup = 1;
 					foreach (var group in result.Boxes)
 					{
-						Console.WriteLine("\nGroup #" + numGroup);
+						Console.WriteLine("\nGroup #" + numGroup + " (" + group.Count + ")");
 						foreach (var box in group)
 						{
-							Console.WriteLine(box.TopLeft + " " + box.TopRight + " " + box.BottomLeft + " " + box.BottomRight);
+							Console.WriteLine(box.TopLeft + " " + box.TopRight + "\n" + box.BottomLeft + " " + box.BottomRight + "\n");
 						}
 						numGroup++;
 					}
