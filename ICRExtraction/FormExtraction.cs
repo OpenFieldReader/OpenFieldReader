@@ -592,7 +592,6 @@ namespace ICRExtraction
 
 				// Sometime, there is missing points. We will interconnect the boxes.
 				List<Box> boxes = new List<Box>();
-				allBoxes.Add(boxes);
 				Box curBoxes = null;
 
 				while (allPoints.Any())
@@ -676,6 +675,11 @@ namespace ICRExtraction
 						curBoxes.BottomLeft = curPointBottom.Value;
 					}
 				}
+
+				if (boxes.Any())
+				{
+					allBoxes.Add(boxes);
+				}
 			}
 
 			/*nextGroupId = 0;
@@ -694,6 +698,44 @@ namespace ICRExtraction
 					DrawJunction(outputImg, nextGroupId, junction);
 				}
 			}*/
+
+			// Let's explore boxes!
+			// We will check if those boxes seem valid.
+			for (int i = 0; i < allBoxes.Count; i++)
+			{
+				var isValid = true;
+				var curBoxes = allBoxes[i];
+				
+				if (allBoxes.Count < 2)
+				{
+					isValid = false;
+				}
+				else
+				{
+					var minWidth = curBoxes.Min(m =>
+						((m.TopRight.X + m.BottomRight.X) / 2) - ((m.TopLeft.X + m.BottomLeft.X) / 2));
+					var minHeight = curBoxes.Min(m =>
+						((m.BottomRight.Y + m.BottomLeft.Y) / 2) - ((m.TopRight.Y + m.TopLeft.Y) / 2));
+					var maxWidth = curBoxes.Max(m =>
+						((m.TopRight.X + m.BottomRight.X) / 2) - ((m.TopLeft.X + m.BottomLeft.X) / 2));
+					var maxHeight = curBoxes.Max(m =>
+						((m.BottomRight.Y + m.BottomLeft.Y) / 2) - ((m.TopRight.Y + m.TopLeft.Y) / 2));
+
+					// TODO: add parameters
+					// If the width and height are too different, we should not consider the boxes.
+					if (maxWidth - minWidth > 7 || maxHeight - minHeight > 5)
+					{
+						isValid = false;
+					}
+				}
+
+				if (!isValid)
+				{
+					allBoxes.RemoveAt(i);
+					i--;
+				}
+			}
+
 
 			int size = 5;
 			foreach (var item in allBoxes)
