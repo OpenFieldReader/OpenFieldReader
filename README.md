@@ -38,6 +38,15 @@ The example below shows boxes corners and centers.
     <img alt="Example" src="Results/Boxes.png" />
 </p>
 
+## Characters extraction (Jan 10, 2018)
+It validates that most boxes has the same width and height.
+
+Some fine tuning has been done to support more paper-based forms.
+
+The image below shows some characters.
+<p align="center">
+    <img alt="Example" src="Results/Letters.PNG" />
+</p>
 
 # Copyright and license
 Code released under the MIT license.
