@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 
 namespace ICRExtraction
@@ -39,7 +40,7 @@ namespace ICRExtraction
 			var orig = new Mat(filename);
 			var image = new Mat(filename, ImreadModes.GrayScale);
 
-			Cv2.AdaptiveThreshold(image, image, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, 9, 2);
+			Cv2.AdaptiveThreshold(image, image, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, 9, 4);
 
 			// Resize image if too large.
 			if (image.Width > options.ResizeWidth)
@@ -48,14 +49,15 @@ namespace ICRExtraction
 				Cv2.Resize(image, image, new Size(options.ResizeWidth, height));
 			}
 
+			Cv2.BitwiseNot(image, image);
+			Cv2.Dilate(image, image, Cv2.GetStructuringElement(MorphShapes.Cross, new Size(2, 2)));
+
 			/*using (new Window("dst image", image))
 			{
 				Cv2.WaitKey();
 				Cv2.DestroyAllWindows();
 			}*/
 
-			Cv2.BitwiseNot(image, image);
-			Cv2.Dilate(image, image, Cv2.GetStructuringElement(MorphShapes.Cross, new Size(2, 2)));
 			//Cv2.Blur(image, image, new Size(1, 2));
 			Cv2.Threshold(image, image, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
 
@@ -94,13 +96,13 @@ namespace ICRExtraction
 				Cv2.Resize(image, image, new Size(width, height));
 				Cv2.Resize(newImage, newImage, new Size(width, height));
 
-				using (new Window("orig", orig))
+				/*using (new Window("orig", orig))
 				using (new Window("pre", image))
 				using (new Window("post", newImage))
 				{
 					Cv2.WaitKey();
 					Cv2.DestroyAllWindows();
-				}
+				}*/
 			}
 
 			// Dispose.
@@ -340,7 +342,7 @@ namespace ICRExtraction
 					}*/
 
 					var gapX = Math.Abs(gap.X - start.X);
-					if (gapX <= 20 || gapX > 50)
+					if (gapX <= 15 || gapX > 50)
 					{
 						continue;
 					}
@@ -456,7 +458,7 @@ namespace ICRExtraction
 			// Let's explore the clusters directions and try to interconnect clusters on the horizontal side.
 
 			// Minimum percent of elements to determine the direction.
-			int minElementPercent = 50;
+			int minElementPercent = 60;
 
 			List<LineCluster> lineClusters = new List<LineCluster>();
 
@@ -525,8 +527,8 @@ namespace ICRExtraction
 							{
 								var avgGapX = (firstGapX + secondGapX) / 2;
 
-								var minGapY = Math.Max(10, avgGapX - 10);
-								var maxGapY = Math.Max(60, avgGapX + 10);
+								var minGapY = Math.Max(10, avgGapX - 5);
+								var maxGapY = avgGapX + 5;
 
 								// For the majority of element on top line, we should be able to interconnect
 								// with the other line.
@@ -576,7 +578,7 @@ namespace ICRExtraction
 					}
 				}
 			}
-			
+
 			// We can now merge near junctions.
 			// We want to find the centroid in order to determine the boxes dimensions and position.
 			List<List<Box>> allBoxes = new List<List<Box>>();
@@ -682,7 +684,17 @@ namespace ICRExtraction
 				}
 			}
 
-			/*nextGroupId = 0;
+			nextGroupId = 0;
+
+			foreach (var item in lineClusters)
+			{
+				nextGroupId++;
+				foreach (var junction in item.Junctions)
+				{
+					DrawJunction(outputImg, nextGroupId, junction);
+				}
+			}
+
 			foreach (var item in boxesClusters)
 			{
 				nextGroupId++;
@@ -697,7 +709,7 @@ namespace ICRExtraction
 				{
 					DrawJunction(outputImg, nextGroupId, junction);
 				}
-			}*/
+			}
 
 			// Let's explore boxes!
 			// We will check if those boxes seem valid.
@@ -705,7 +717,7 @@ namespace ICRExtraction
 			{
 				var isValid = true;
 				var curBoxes = allBoxes[i];
-				
+
 				if (allBoxes.Count < 2)
 				{
 					isValid = false;
@@ -736,7 +748,6 @@ namespace ICRExtraction
 				}
 			}
 
-
 			int size = 5;
 			foreach (var item in allBoxes)
 			{
@@ -751,7 +762,6 @@ namespace ICRExtraction
 					// Let's show the center of the box.
 					var x = (box.TopLeft.X + box.TopRight.X + box.BottomLeft.X + box.BottomRight.X) / 4;
 					var y = (box.TopLeft.Y + box.TopRight.Y + box.BottomLeft.Y + box.BottomRight.Y) / 4;
-					
 					DrawPoint(outputImg, nextGroupId, x, y, 10);
 				}
 			}
