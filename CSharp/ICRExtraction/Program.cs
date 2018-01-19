@@ -14,7 +14,9 @@ namespace ICRExtraction
 		static void Main(string[] args)
 		{
 			var projectDir = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName;
-			var pathFiles = Directory.EnumerateFiles(projectDir + @"\Samples").ToList();
+			var pathFiles = Directory.EnumerateFiles(projectDir + @"\Samples")
+				//.Where(m => m.Contains("form9"))
+				.ToList();
 			
 			int i = 0;
 			object newIdLock = new object();
@@ -40,6 +42,8 @@ namespace ICRExtraction
 					
 					using (var image = new Mat(pathFile, ImreadModes.GrayScale))
 					{
+						Cv2.AdaptiveThreshold(image, image, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, 9, 4);
+
 						// TODO: we should not resize. (keep maximum quality)
 						if (image.Width > 800)
 						{

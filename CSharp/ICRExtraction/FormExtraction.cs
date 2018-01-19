@@ -930,7 +930,21 @@ namespace ICRExtraction
 
 		private static int GetVal(MatIndexer<Vec3b> labels, int y, int x)
 		{
-			return (labels[y, x].Item0 | labels[y, x].Item1 | labels[y, x].Item2);
+			// OpenCV does not validate index.
+			// It does a buffer overflow. (read current pixel and next 2 pixels in the array in grayscale mode)
+			// If it's outside the array, it returns 0.
+			// The side effect was interesting.
+			// It improves horizontal line detection.
+			// But the boxes were not centered.
+			//return (labels[y, x].Item0 | labels[y, x].Item1 | labels[y, x].Item2);
+
+			// But this time, I will consider the previous pixel and only the next pixel. (on the same line)
+			// The boxes are better centered.
+			
+			return (
+				labels[y, x - 1].Item0 |
+				labels[y, x].Item0 |
+				labels[y, x + 1].Item0);
 		}
 
 		private static Random Random = new Random();
