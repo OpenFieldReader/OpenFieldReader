@@ -32,12 +32,13 @@ namespace ICRExtraction
 				File.Delete(pathFile);
 			}
 
-			Parallel.ForEach(pathFiles, new ParallelOptions { MaxDegreeOfParallelism = 1 }, pathFile =>
+			Parallel.ForEach(pathFiles, new ParallelOptions { MaxDegreeOfParallelism = 2 }, pathFile =>
 			{
 				Console.WriteLine("Processing: " + Path.GetFileNameWithoutExtension(pathFile));
 
 				try
 				{
+					var filename = Path.GetFileNameWithoutExtension(pathFile);
 					var result = FormExtraction.ProcessImage(pathFile);
 					
 					using (var image = new Mat(pathFile, ImreadModes.GrayScale))
@@ -83,7 +84,43 @@ namespace ICRExtraction
 								{
 									using (var subImg = new Mat(image, new Rect(xTopLeft, yTopLeft, estimatedWidth, estimatedHeight)))
 									{
-										Cv2.ImWrite(resultDir + @"\" + id + "_" + characterNum + ".jpg", subImg);
+										MatOfByte3 mat3 = new MatOfByte3(subImg);
+										MatIndexer<Vec3b> indexer = mat3.GetIndexer();
+
+										int borderPixelX = 4;
+										int borderPixelY = 4;
+										var minY = Math.Min(borderPixelX, subImg.Height);
+										var maxY = Math.Max(0, subImg.Height - borderPixelX);
+										var minX = Math.Min(borderPixelX, subImg.Width);
+										var maxX = Math.Max(0, subImg.Width - borderPixelY);
+										
+										// Basic empty box detection.
+										int whitePixelCounter = 0;
+										int pixelCounter = 0;
+										for (int y = minY; y <= maxY; y++)
+										{
+											for (int x = minX; x <= maxX; x++)
+											{
+												var pixel = indexer[y, x].Item0; // Grayscale only
+
+												if (pixel == 255)
+												{
+													whitePixelCounter++;
+												}
+												pixelCounter++;
+											}
+										}
+										mat3.Dispose();
+
+										int percentRatio = 100 * whitePixelCounter / pixelCounter;
+
+										var outputFilename = filename + "_" + id + "_" + characterNum + "_" + percentRatio;
+
+										// Exclude empty boxes.
+										if (percentRatio < 95)
+										{
+											Cv2.ImWrite(resultDir + @"\" + outputFilename + ".jpg", subImg);
+										}
 									}
 								}
 								catch (Exception ex)
