@@ -262,3 +262,5 @@ __pycache__/
 
 
 CSharp/ICRExtraction/Results/
+.ipynb_checkpoints
+
