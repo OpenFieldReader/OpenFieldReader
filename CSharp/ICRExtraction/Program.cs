@@ -32,19 +32,18 @@ namespace ICRExtraction
 				File.Delete(pathFile);
 			}
 
-			Parallel.ForEach(pathFiles, new ParallelOptions { MaxDegreeOfParallelism = 2 }, pathFile =>
+			Parallel.ForEach(pathFiles, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, pathFile =>
 			{
-				Console.WriteLine("Processing: " + Path.GetFileNameWithoutExtension(pathFile));
-
 				try
 				{
 					var filename = Path.GetFileNameWithoutExtension(pathFile);
 					var result = FormExtraction.ProcessImage(pathFile);
-					
+					Console.WriteLine("Processing: " + Path.GetFileNameWithoutExtension(pathFile) + ", Duration: " + result.Duration);
+
 					using (var image = new Mat(pathFile, ImreadModes.GrayScale))
 					{
 						Cv2.AdaptiveThreshold(image, image, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, 9, 4);
-
+						
 						// TODO: we should not resize. (keep maximum quality)
 						if (image.Width > 800)
 						{
@@ -57,7 +56,7 @@ namespace ICRExtraction
 						// You may want to use ".OrderBy(m => m.Min(x => x.TopLeft.Y)).Take(1)" to select the first box on top.
 						foreach (var group in result.Boxes)
 						{
-							Console.WriteLine("\nGroup #" + numGroup + " (" + group.Count + ")");
+							// Console.WriteLine("\nGroup #" + numGroup + " (" + group.Count + ")");
 
 							int id = 0;
 							lock (newIdLock)
@@ -69,7 +68,7 @@ namespace ICRExtraction
 							int characterNum = 1;
 							foreach (var box in group)
 							{
-								Console.WriteLine(box.TopLeft + " " + box.TopRight + "\n" + box.BottomLeft + " " + box.BottomRight + "\n");
+								// Console.WriteLine(box.TopLeft + " " + box.TopRight + "\n" + box.BottomLeft + " " + box.BottomRight + "\n");
 
 								var xTopLeft = Math.Min(box.TopLeft.X, box.BottomLeft.X);
 								var yTopLeft = Math.Min(box.TopLeft.Y, box.TopRight.Y);
@@ -123,9 +122,9 @@ namespace ICRExtraction
 										}
 									}
 								}
-								catch (Exception ex)
+								catch (Exception)
 								{
-									Console.WriteLine("Can't generate subImg: " + ex);
+									// Ignore it. Outside image.
 								}
 
 								characterNum++;
@@ -136,8 +135,7 @@ namespace ICRExtraction
 				}
 				catch (Exception ex)
 				{
-					Console.WriteLine("Something wrong happen: " + ex.Message);
-					Console.WriteLine(ex.StackTrace);
+					Console.WriteLine("Processing: " + Path.GetFileNameWithoutExtension(pathFile) + ", Error: " + ex.Message);
 				}
 			});
 

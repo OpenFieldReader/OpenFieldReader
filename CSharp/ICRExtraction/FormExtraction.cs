@@ -11,21 +11,39 @@ namespace ICRExtraction
 		public class FormExtractionOptions
 		{
 			public int ResizeWidth { get; set; }
-
 			public int JunctionWidth { get; set; }
 			public int JunctionHeight { get; set; }
 
+			public int MinNumElements { get; set; }
+			public int MaxJunctions { get; set; }
+			public int MaxSolutions { get; set; }
+
+			public bool ShowDebugImage { get; set; }
+
 			public FormExtractionOptions()
 			{
+				// These values should not change.
 				ResizeWidth = 800;
 				JunctionWidth = 25;
 				JunctionHeight = 15;
+
+				// These values can be changed.
+
+				// Minimum boxes per group.
+				MinNumElements = 5;
+
+				// These properties prevent wasting CPU on complex image.
+				MaxJunctions = 20000;
+				MaxSolutions = 50000;
+
+				ShowDebugImage = false;
 			}
 		}
 
 		public class FormExtractionResult
 		{
 			public List<List<Box>> Boxes { get; set; }
+			public TimeSpan Duration { get; set; }
 		}
 
 		public static FormExtractionResult ProcessImage(string filename, FormExtractionOptions options = null)
@@ -50,16 +68,7 @@ namespace ICRExtraction
 
 			Cv2.BitwiseNot(image, image);
 			Cv2.Dilate(image, image, Cv2.GetStructuringElement(MorphShapes.Cross, new Size(2, 2)));
-
-			/*using (new Window("dst image", image))
-			{
-				Cv2.WaitKey();
-				Cv2.DestroyAllWindows();
-			}*/
-
-			//Cv2.Blur(image, image, new Size(1, 2));
-			Cv2.Threshold(image, image, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
-
+			
 			MatOfByte3 mat3 = new MatOfByte3(image);
 			MatIndexer<Vec3b> indexer = mat3.GetIndexer();
 
@@ -75,7 +84,8 @@ namespace ICRExtraction
 			watch.Start();
 			var result = HasBoxes(indexer, row, col, out outputImg, options);
 			watch.Stop();
-			Console.WriteLine("Duration: " + watch.Elapsed);
+			result.Duration = watch.Elapsed;
+			//Console.WriteLine("Duration: " + watch.Elapsed);
 
 			if (result.Boxes.Any())
 			{
@@ -84,10 +94,8 @@ namespace ICRExtraction
 			}
 
 			// Preview
-			if (result.Boxes.Any() && image.Width != 0)
+			if (result.Boxes.Any() && image.Width != 0 && options.ShowDebugImage)
 			{
-				//Cv2.Dilate(newImage, newImage, Cv2.GetStructuringElement(MorphShapes.Cross, new Size(2, 2)));
-
 				Cv2.BitwiseNot(image, image);
 				int width = 400;
 				var height = width * image.Height / image.Width;
@@ -95,13 +103,13 @@ namespace ICRExtraction
 				Cv2.Resize(image, image, new Size(width, height));
 				Cv2.Resize(newImage, newImage, new Size(width, height));
 
-				/*using (new Window("orig", orig))
+				using (new Window("orig", orig))
 				using (new Window("pre", image))
 				using (new Window("post", newImage))
 				{
 					Cv2.WaitKey();
 					Cv2.DestroyAllWindows();
-				}*/
+				}
 			}
 
 			// Dispose.
@@ -111,24 +119,6 @@ namespace ICRExtraction
 			mat3.Dispose();
 
 			return result;
-
-			//newImage.SaveImage("mask.png");
-
-			//var maskImg = new Mat("mask.png", ImreadModes.GrayScale);
-			//Cv2.BitwiseNot(maskImg, maskImg);
-
-			//Cv2.Blur(maskImg, maskImg, new Size(3, 3));
-			//Cv2.Threshold(maskImg, maskImg, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
-
-			//Cv2.BitwiseNot(maskImg, maskImg);
-			//Cv2.BitwiseNot(image, image);
-			//Cv2.BitwiseOr(image, maskImg, maskImg);
-
-			//using (new Window("src image", image))
-			//using (new Window("dst image", maskImg))
-			//{
-			//	Cv2.WaitKey();
-			//}
 		}
 
 		private class Junction
@@ -252,27 +242,17 @@ namespace ICRExtraction
 					listJunction.AddRange(listJunctionX);
 				}
 			}
+			
+			// Console.WriteLine("Junction.count: " + listJunction.Count);
 
-			Console.WriteLine("Junction.count: " + listJunction.Count);
-
-			// TODO: add a parameter
-			if (listJunction.Count > 20000)
+			if (listJunction.Count >= options.MaxJunctions)
 			{
 				// Something wrong happen. Too much junction for now.
 				// If we continue, we would spend too much time processing the image.
 				// Let's suppose we don't know.
-				return new FormExtractionResult();
+				throw new Exception("Too many junctions. The image seem too complex. You may want to increase MaxJunctions");
 			}
-
-			// We can skip the footer to focus on a particular part of the image.
-			// (Faster to process and may improve accuracy)
-			// Some forms contains image in the footer and it prevents extra processing.
-
-			// TODO: add parameter
-			/*int pagePercentToConsider = 100;
-			int maxRow = row * pagePercentToConsider / 100;
-			listJunction = listJunction.Where(m => m.Y < maxRow).ToList();*/
-
+			
 			// Let's check the list of points.
 
 			// Search near same line.
@@ -358,24 +338,20 @@ namespace ICRExtraction
 
 					int numElementsRight = FindElementsOnDirection(cachePossibleNextJunctionRight, start, gap, gapX, curSolution);
 					int numElementsLeft = FindElementsOnDirection(cachePossibleNextJunctionLeft, start, gap, -gapX, curSolution);
-
+					
 					int numElements = numElementsLeft + numElementsRight;
 
-					if (numElements > 4)
+					if (numElements >= options.MinNumElements)
 					{
-						// TODO: add a parameter.
-						if (numSol == 50000)
+						if (numSol == options.MaxSolutions)
 						{
 							// Something wrong happen. Too much solution for now.
 							// If we continue, we would spend too much time processing the image.
 							// Let's suppose we don't know.
-							return new FormExtractionResult();
+							throw new Exception("Too much solution. You may want to increase MaxSolutions.");
 						}
 
 						numSol++;
-						if (numSol % 1000 == 0)
-							Console.WriteLine(numSol + " : Found ");
-
 						listSolutions.Add(new Line
 						{
 							GapX = gapX,
@@ -399,10 +375,9 @@ namespace ICRExtraction
 				}
 			}
 
-			Console.WriteLine("Skip: " + skipSol);
-
-			Console.WriteLine(numSol + " : Solution found");
-			Console.WriteLine(possibleSol.Count + " Best solution found");
+			//Console.WriteLine("Skip: " + skipSol);
+			//Console.WriteLine(numSol + " : Solution found");
+			//Console.WriteLine(possibleSol.Count + " Best solution found");
 
 			// Let's merge near junctions. (vertical line)
 			// We assign a group id for each clusters.
@@ -651,10 +626,6 @@ namespace ICRExtraction
 
 					if (!curPointTop.HasValue && !curPointBottom.HasValue)
 					{
-						// Really strange..
-						// Should not happen.
-
-						// TODO: better error handling...
 						throw new Exception("This should not happen. Please open an issue on GitHub with your image.");
 					}
 
@@ -732,7 +703,6 @@ namespace ICRExtraction
 					var maxHeight = curBoxes.Max(m =>
 						((m.BottomRight.Y + m.BottomLeft.Y) / 2) - ((m.TopRight.Y + m.TopLeft.Y) / 2));
 
-					// TODO: add parameters
 					// If the width and height are too different, we should not consider the boxes.
 					if (maxWidth - minWidth > 7 || maxHeight - minHeight > 5)
 					{
@@ -765,7 +735,6 @@ namespace ICRExtraction
 				}
 			}
 
-			// TODO: returns boxes, debug info, etc.
 			return new FormExtractionResult
 			{
 				Boxes = allBoxes
