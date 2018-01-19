@@ -48,5 +48,8 @@ The image below shows some characters.
     <img alt="Example" src="Results/Letters.PNG" />
 </p>
 
+## Characters extraction (Jan 19, 2018)
+The boxes are better centered. Empty boxes detection and removal.
+
 # Copyright and license
 Code released under the MIT license.
