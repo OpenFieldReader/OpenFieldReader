@@ -2,12 +2,122 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 
 namespace ICRExtraction
 {
 	public class FormExtraction
 	{
+		public static void ExtractCharacters(string pathFile, string resultDir, bool removeEmptyBoxes = false)
+		{
+			int groupId = 0;
+			
+			try
+			{
+				var filename = Path.GetFileNameWithoutExtension(pathFile);
+				var result = FormExtraction.ProcessImage(pathFile);
+				Console.WriteLine("Processing: " + Path.GetFileNameWithoutExtension(pathFile) + ", Duration: " + result.Duration);
+
+				using (var image = new Mat(pathFile, ImreadModes.GrayScale))
+				{
+					Cv2.AdaptiveThreshold(image, image, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, 9, 4);
+
+					// TODO: we should not resize. (keep maximum quality)
+					if (image.Width > 800)
+					{
+						var height = 800 * image.Height / image.Width;
+						Cv2.Resize(image, image, new Size(800, height));
+					}
+
+					// You may want to use ".OrderBy(m => m.Min(x => x.TopLeft.Y)).Take(1)" to select the first box on top.
+					foreach (var group in result.Boxes)
+					{
+						// Console.WriteLine("\nGroup #" + numGroup + " (" + group.Count + ")");
+
+						groupId++;
+
+						int characterNum = 1;
+						foreach (var box in group)
+						{
+							// Console.WriteLine(box.TopLeft + " " + box.TopRight + "\n" + box.BottomLeft + " " + box.BottomRight + "\n");
+
+							var xTopLeft = Math.Min(box.TopLeft.X, box.BottomLeft.X);
+							var yTopLeft = Math.Min(box.TopLeft.Y, box.TopRight.Y);
+
+							var xBottomRight = Math.Max(box.TopRight.X, box.BottomRight.X);
+							var yBottomRight = Math.Max(box.BottomLeft.Y, box.BottomRight.Y);
+
+							var estimatedWidth = xBottomRight - xTopLeft;
+							var estimatedHeight = yBottomRight - yTopLeft;
+
+							try
+							{
+								using (var subImg = new Mat(image, new Rect(xTopLeft, yTopLeft, estimatedWidth, estimatedHeight)))
+								{
+									MatOfByte3 mat3 = new MatOfByte3(subImg);
+									MatIndexer<Vec3b> indexer = mat3.GetIndexer();
+
+									int borderPixelX = 4;
+									int borderPixelY = 4;
+									var minY = Math.Min(borderPixelX, subImg.Height);
+									var maxY = Math.Max(0, subImg.Height - borderPixelX);
+									var minX = Math.Min(borderPixelX, subImg.Width);
+									var maxX = Math.Max(0, subImg.Width - borderPixelY);
+
+									var outputFilename = filename + "_g-" + groupId + "_n-" + characterNum;
+
+									if (removeEmptyBoxes)
+									{
+										// Basic empty box detection.
+										int whitePixelCounter = 0;
+										int pixelCounter = 0;
+										for (int y = minY; y <= maxY; y++)
+										{
+											for (int x = minX; x <= maxX; x++)
+											{
+												var pixel = indexer[y, x].Item0; // Grayscale only
+
+												if (pixel == 255)
+												{
+													whitePixelCounter++;
+												}
+												pixelCounter++;
+											}
+										}
+										mat3.Dispose();
+
+										int percentRatio = 100 * whitePixelCounter / pixelCounter;
+
+										// Exclude empty boxes.
+										if (percentRatio < 95)
+										{
+											Cv2.ImWrite(resultDir + Path.DirectorySeparatorChar + outputFilename + ".jpg", subImg);
+										}
+									}
+									else
+									{
+										Cv2.ImWrite(resultDir + Path.DirectorySeparatorChar + outputFilename + ".jpg", subImg);
+									}
+									
+								}
+							}
+							catch (Exception)
+							{
+								// Ignore it. Outside image.
+							}
+
+							characterNum++;
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine("Processing: " + Path.GetFileNameWithoutExtension(pathFile) + ", Error: " + ex.Message);
+			}
+		}
+
 		public class FormExtractionOptions
 		{
 			public int ResizeWidth { get; set; }

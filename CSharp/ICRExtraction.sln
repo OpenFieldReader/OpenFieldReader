@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.26730.16
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ICRExtraction", "ICRExtraction\ICRExtraction.csproj", "{06E9FA11-AB24-4F5F-8104-B1FC63B24AA6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ICRExtractionCore", "ICRExtractionCore\ICRExtractionCore.csproj", "{434ECDCC-36D5-4DEE-B188-DD8C74E3A747}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ICRExtractionConsoleApp", "ICRExtractionConsoleApp\ICRExtractionConsoleApp.csproj", "{D1AB3DA0-BDDD-4DDF-BBFE-21782F0BE5F7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +13,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{06E9FA11-AB24-4F5F-8104-B1FC63B24AA6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{06E9FA11-AB24-4F5F-8104-B1FC63B24AA6}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{06E9FA11-AB24-4F5F-8104-B1FC63B24AA6}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{06E9FA11-AB24-4F5F-8104-B1FC63B24AA6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{434ECDCC-36D5-4DEE-B188-DD8C74E3A747}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{434ECDCC-36D5-4DEE-B188-DD8C74E3A747}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{434ECDCC-36D5-4DEE-B188-DD8C74E3A747}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{434ECDCC-36D5-4DEE-B188-DD8C74E3A747}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1AB3DA0-BDDD-4DDF-BBFE-21782F0BE5F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1AB3DA0-BDDD-4DDF-BBFE-21782F0BE5F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1AB3DA0-BDDD-4DDF-BBFE-21782F0BE5F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1AB3DA0-BDDD-4DDF-BBFE-21782F0BE5F7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
