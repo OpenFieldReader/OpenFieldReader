@@ -120,6 +120,8 @@ namespace ICRExtraction
 			catch (Exception ex)
 			{
 				Console.WriteLine("Processing: " + Path.GetFileNameWithoutExtension(pathFile) + ", Error: " + ex.Message);
+				Console.WriteLine(ex.StackTrace);
+				Console.ReadLine();
 			}
 		}
 
@@ -197,10 +199,15 @@ namespace ICRExtraction
 			// We must determine if it "may" be an interesting blob.
 			Stopwatch watch = new Stopwatch();
 			watch.Start();
-			var result = HasBoxes(indexer, row, col, options);
+
+			int[] imgData = new int[row * col];
+			for (int y = 0; y < row; y++)
+				for (int x = 0; x < col; x++)
+					imgData[y + x * row] = indexer[y, x];
+
+			var result = HasBoxes(imgData, row, col, options);
 			watch.Stop();
 			result.Duration = watch.Elapsed;
-			//Console.WriteLine("Duration: " + watch.Elapsed);
 			
 			// Preview
 			if (result.Boxes.Any() && image.Width != 0 && options.ShowDebugImage)
@@ -246,13 +253,13 @@ namespace ICRExtraction
 			public int X { get; set; }
 			public int Y { get; set; }
 			public int GroupId { get; set; }
-			public double GapX { get; set; }
+			public float GapX { get; set; }
 		}
 
 		private class Line
 		{
 			public List<Junction> Junctions { get; set; }
-			public double GapX { get; set; }
+			public float GapX { get; set; }
 		}
 
 		private class LineCluster
@@ -268,7 +275,7 @@ namespace ICRExtraction
 		{
 			public LineCluster TopLine { get; set; }
 			public LineCluster BottomLine { get; set; }
-			public double GapY { get; set; }
+			public float GapY { get; set; }
 		}
 
 		public class Box
@@ -279,7 +286,7 @@ namespace ICRExtraction
 			public Point BottomRight { get; set; }
 		}
 
-		private static FormExtractionResult HasBoxes(MatIndexer<byte> labels, int row, int col, FormExtractionOptions options)
+		private static FormExtractionResult HasBoxes(int[] imgData, int row, int col, FormExtractionOptions options)
 		{
 			// Debug image.
 			int[,] debugImg = null;
@@ -308,14 +315,14 @@ namespace ICRExtraction
 			// We must ignore it to prevent wasting CPU and spend too much time.
 			int maxProximity = 10;
 
-			for (int y = 0; y < row; y++)
+			for (int y = 1; y < row - 1; y++)
 			{
 				List<Junction> listJunctionX = null;
 				int proximityCounter = 0;
 
-				for (int x = 0; x < col; x++)
+				for (int x = 1; x < col - 1; x++)
 				{
-					var junction = GetJunction(labels, row, col, height, width, y, x);
+					var junction = GetJunction(imgData, row, col, height, width, y, x);
 					if (junction != null)
 					{
 						if (listJunctionX == null)
@@ -383,7 +390,7 @@ namespace ICRExtraction
 			Dictionary<Junction, List<Junction>> cachePossibleNextJunctionLeft = new Dictionary<Junction, List<Junction>>();
 			int minX = 10;
 			int maxX = 70;
-			foreach (var junction in cacheListJunctionPerLine.SelectMany(m => m.Value))
+			foreach (var junction in listJunction)
 			{
 				var listJunctionNearJunction = new List<Junction>();
 
@@ -591,7 +598,7 @@ namespace ICRExtraction
 			Dictionary<LineCluster, LineCluster> lineClustersTop = new Dictionary<LineCluster, LineCluster>();
 			Dictionary<LineCluster, LineCluster> lineClustersBottom = new Dictionary<LineCluster, LineCluster>();
 
-			Dictionary<LineCluster, double> cacheGapX = new Dictionary<LineCluster, double>();
+			Dictionary<LineCluster, float> cacheGapX = new Dictionary<LineCluster, float>();
 
 			// Merge top and bottom lines.
 			foreach (var itemA in lineClusters)
@@ -638,7 +645,7 @@ namespace ICRExtraction
 								int minCount = Math.Min(topLine.Junctions.Count, bottomLine.Junctions.Count);
 								int minimumCommonElements = minCount * minPercent / 100;
 
-								List<double> avgGapY = new List<double>();
+								List<float> avgGapY = new List<float>();
 								foreach (var topJunction in topLine.Junctions)
 								{
 									var commonElement = bottomLine.Junctions.Where(m =>
@@ -648,7 +655,7 @@ namespace ICRExtraction
 									);
 									if (commonElement.Any())
 									{
-										avgGapY.Add(commonElement.Average(m => topJunction.Y - m.Y));
+										avgGapY.Add((float)commonElement.Average(m => topJunction.Y - m.Y));
 										commonElementCounter++;
 
 										if (commonElementCounter >= minimumCommonElements)
@@ -975,41 +982,41 @@ namespace ICRExtraction
 			return numElements;
 		}
 
-		private static Junction GetJunction(MatIndexer<byte> labels, int row, int col, int height, int width, int y, int x)
+		private static Junction GetJunction(int[] imgData, int row, int col, int height, int width, int y, int x)
 		{
-			var val = GetVal(labels, y, x);
+			var val = GetVal(imgData, y, x, row);
 			if (0 < val)
 			{
 				// Let's explore the directions.
 
 				int numTop = 0;
-				if (y - height >= 0)
+				if (y - height >= 1)
 					for (int i = 0; i < height; i++)
-						if (GetVal(labels, y - i, x) == val)
+						if (GetVal(imgData, y - i, x, row) == val)
 							numTop++;
 						else
 							break;
 
 				int numBottom = 0;
-				if (y + height < row)
+				if (y + height < row - 1)
 					for (int i = 0; i < height; i++)
-						if (GetVal(labels, y + i, x) == val)
+						if (GetVal(imgData, y + i, x, row) == val)
 							numBottom++;
 						else
 							break;
 
 				int numRight = 0;
-				if (x + width < col)
+				if (x + width < col - 1)
 					for (int i = 0; i < width; i++)
-						if (GetVal(labels, y, x + i) == val)
+						if (GetVal(imgData, y, x + i, row) == val)
 							numRight++;
 						else
 							break;
 
 				int numLeft = 0;
-				if (x - width >= 0)
+				if (x - width >= 1)
 					for (int i = 0; i < width; i++)
-						if (GetVal(labels, y, x - i) == val)
+						if (GetVal(imgData, y, x - i, row) == val)
 							numLeft++;
 						else
 							break;
@@ -1039,7 +1046,7 @@ namespace ICRExtraction
 			return null;
 		}
 
-		private static int GetVal(MatIndexer<byte> labels, int y, int x)
+		private static int GetVal(int[] imgData, int y, int x, int row)
 		{
 			// OpenCV does not validate index.
 			// It does a buffer overflow. (read current pixel and next 2 pixels in the array in grayscale mode)
@@ -1053,9 +1060,9 @@ namespace ICRExtraction
 			// The boxes are better centered.
 			
 			return (
-				labels[y, x - 1] |
-				labels[y, x] |
-				labels[y, x + 1]);
+				imgData[y + (x - 1) * row] |
+				imgData[y + x * row] |
+				imgData[y + (x + 1) * row]);
 		}
 
 		private static Random Random = new Random();
