@@ -17,6 +17,11 @@ namespace ICRExtraction
 			{
 				var filename = Path.GetFileNameWithoutExtension(pathFile);
 				var result = FormExtraction.ProcessImage(pathFile);
+				if (result.ReturnCode != 0)
+				{
+					throw new Exception("ReturnCode: " + result.ReturnCode);
+				}
+
 				Console.WriteLine("Processing: " + Path.GetFileNameWithoutExtension(pathFile) + ", Duration: " + result.Duration);
 
 				using (var image = new Mat(pathFile, ImreadModes.GrayScale))
@@ -152,6 +157,8 @@ namespace ICRExtraction
 
 		public class FormExtractionResult
 		{
+			public int ReturnCode { get; set; }
+			public int[,] DebugImg { get; set; }
 			public List<List<Box>> Boxes { get; set; }
 			public TimeSpan Duration { get; set; }
 		}
@@ -179,8 +186,8 @@ namespace ICRExtraction
 			Cv2.BitwiseNot(image, image);
 			Cv2.Dilate(image, image, Cv2.GetStructuringElement(MorphShapes.Cross, new Size(2, 2)));
 			
-			MatOfByte3 mat3 = new MatOfByte3(image);
-			MatIndexer<Vec3b> indexer = mat3.GetIndexer();
+			MatOfByte mat = new MatOfByte(image);
+			MatIndexer<byte> indexer = mat.GetIndexer();
 
 			var row = image.Height;
 			var col = image.Width;
@@ -188,24 +195,19 @@ namespace ICRExtraction
 			newImage.SetTo(Scalar.Black);
 
 			// We must determine if it "may" be an interesting blob.
-			int[,] outputImg = null;
-
 			Stopwatch watch = new Stopwatch();
 			watch.Start();
-			var result = HasBoxes(indexer, row, col, out outputImg, options);
+			var result = HasBoxes(indexer, row, col, options);
 			watch.Stop();
 			result.Duration = watch.Elapsed;
 			//Console.WriteLine("Duration: " + watch.Elapsed);
-
-			if (result.Boxes.Any())
-			{
-				var img = CreateImage(outputImg, hasColor: true);
-				Cv2.BitwiseOr(newImage, img, newImage);
-			}
-
+			
 			// Preview
 			if (result.Boxes.Any() && image.Width != 0 && options.ShowDebugImage)
 			{
+				var img = CreateImage(result.DebugImg, hasColor: true);
+				Cv2.BitwiseOr(newImage, img, newImage);
+
 				Cv2.BitwiseNot(image, image);
 				int width = 400;
 				var height = width * image.Height / image.Width;
@@ -226,7 +228,7 @@ namespace ICRExtraction
 			orig.Dispose();
 			image.Dispose();
 			newImage.Dispose();
-			mat3.Dispose();
+			mat.Dispose();
 
 			return result;
 		}
@@ -277,13 +279,17 @@ namespace ICRExtraction
 			public Point BottomRight { get; set; }
 		}
 
-		private static FormExtractionResult HasBoxes(MatIndexer<Vec3b> labels, int row, int col, out int[,] outputImg, FormExtractionOptions options)
+		private static FormExtractionResult HasBoxes(MatIndexer<byte> labels, int row, int col, FormExtractionOptions options)
 		{
 			// Debug image.
-			outputImg = new int[row, col];
-			for (int y = 0; y < row; y++)
-				for (int x = 0; x < col; x++)
-					outputImg[y, x] = 0;
+			int[,] debugImg = null;
+			if (options.ShowDebugImage)
+			{
+				debugImg = new int[row, col];
+				for (int y = 0; y < row; y++)
+					for (int x = 0; x < col; x++)
+						debugImg[y, x] = 0;
+			}
 
 			// We are seaching for pattern!
 			// We look for junctions.
@@ -360,7 +366,11 @@ namespace ICRExtraction
 				// Something wrong happen. Too much junction for now.
 				// If we continue, we would spend too much time processing the image.
 				// Let's suppose we don't know.
-				throw new Exception("Too many junctions. The image seem too complex. You may want to increase MaxJunctions");
+				return new FormExtractionResult
+				{
+					// Too many junctions. The image seem too complex. You may want to increase MaxJunctions
+					ReturnCode = 10
+				};
 			}
 			
 			// Let's check the list of points.
@@ -458,7 +468,11 @@ namespace ICRExtraction
 							// Something wrong happen. Too much solution for now.
 							// If we continue, we would spend too much time processing the image.
 							// Let's suppose we don't know.
-							throw new Exception("Too much solution. You may want to increase MaxSolutions.");
+							return new FormExtractionResult
+							{
+								// Too much solution. You may want to increase MaxSolutions.
+								ReturnCode = 30
+							};
 						}
 
 						numSol++;
@@ -736,7 +750,11 @@ namespace ICRExtraction
 
 					if (!curPointTop.HasValue && !curPointBottom.HasValue)
 					{
-						throw new Exception("This should not happen. Please open an issue on GitHub with your image.");
+						return new FormExtractionResult
+						{
+							// This should not happen. Please open an issue on GitHub with your image.
+							ReturnCode = 20
+						};
 					}
 
 					if (curBoxes == null)
@@ -766,28 +784,31 @@ namespace ICRExtraction
 
 			nextGroupId = 0;
 
-			foreach (var item in lineClusters)
+			if (options.ShowDebugImage)
 			{
-				nextGroupId++;
-				foreach (var junction in item.Junctions)
+				foreach (var item in lineClusters)
 				{
-					DrawJunction(outputImg, nextGroupId, junction);
-				}
-			}
-
-			foreach (var item in boxesClusters)
-			{
-				nextGroupId++;
-
-				// Debug img:
-				foreach (var junction in item.TopLine.Junctions)
-				{
-					DrawJunction(outputImg, nextGroupId, junction);
+					nextGroupId++;
+					foreach (var junction in item.Junctions)
+					{
+						DrawJunction(debugImg, nextGroupId, junction);
+					}
 				}
 
-				foreach (var junction in item.BottomLine.Junctions)
+				foreach (var item in boxesClusters)
 				{
-					DrawJunction(outputImg, nextGroupId, junction);
+					nextGroupId++;
+
+					// Debug img:
+					foreach (var junction in item.TopLine.Junctions)
+					{
+						DrawJunction(debugImg, nextGroupId, junction);
+					}
+
+					foreach (var junction in item.BottomLine.Junctions)
+					{
+						DrawJunction(debugImg, nextGroupId, junction);
+					}
 				}
 			}
 
@@ -827,28 +848,39 @@ namespace ICRExtraction
 				}
 			}
 
-			int size = 5;
-			foreach (var item in allBoxes)
+			if (options.ShowDebugImage)
 			{
-				nextGroupId++;
-				foreach (var box in item)
+				int size = 5;
+				foreach (var item in allBoxes)
 				{
-					DrawPoint(outputImg, nextGroupId, box.TopLeft.X, box.TopLeft.Y, size);
-					DrawPoint(outputImg, nextGroupId, box.TopRight.X, box.TopRight.Y, size);
-					DrawPoint(outputImg, nextGroupId, box.BottomLeft.X, box.BottomLeft.Y, size);
-					DrawPoint(outputImg, nextGroupId, box.BottomRight.X, box.BottomRight.Y, size);
+					nextGroupId++;
+					foreach (var box in item)
+					{
+						DrawPoint(debugImg, nextGroupId, box.TopLeft.X, box.TopLeft.Y, size);
+						DrawPoint(debugImg, nextGroupId, box.TopRight.X, box.TopRight.Y, size);
+						DrawPoint(debugImg, nextGroupId, box.BottomLeft.X, box.BottomLeft.Y, size);
+						DrawPoint(debugImg, nextGroupId, box.BottomRight.X, box.BottomRight.Y, size);
 
-					// Let's show the center of the box.
-					var x = (box.TopLeft.X + box.TopRight.X + box.BottomLeft.X + box.BottomRight.X) / 4;
-					var y = (box.TopLeft.Y + box.TopRight.Y + box.BottomLeft.Y + box.BottomRight.Y) / 4;
-					DrawPoint(outputImg, nextGroupId, x, y, 10);
+						// Let's show the center of the box.
+						var x = (box.TopLeft.X + box.TopRight.X + box.BottomLeft.X + box.BottomRight.X) / 4;
+						var y = (box.TopLeft.Y + box.TopRight.Y + box.BottomLeft.Y + box.BottomRight.Y) / 4;
+						DrawPoint(debugImg, nextGroupId, x, y, 10);
+					}
 				}
 			}
 
-			return new FormExtractionResult
+			FormExtractionResult finalResult = new FormExtractionResult
 			{
-				Boxes = allBoxes
+				Boxes = allBoxes,
+				ReturnCode = 0
 			};
+
+			if (options.ShowDebugImage)
+			{
+				finalResult.DebugImg = debugImg;
+			}
+
+			return finalResult;
 		}
 
 		private static void DrawPoint(int[,] outputImg, int colorCode, int x, int y, int size)
@@ -943,7 +975,7 @@ namespace ICRExtraction
 			return numElements;
 		}
 
-		private static Junction GetJunction(MatIndexer<Vec3b> labels, int row, int col, int height, int width, int y, int x)
+		private static Junction GetJunction(MatIndexer<byte> labels, int row, int col, int height, int width, int y, int x)
 		{
 			var val = GetVal(labels, y, x);
 			if (0 < val)
@@ -1007,7 +1039,7 @@ namespace ICRExtraction
 			return null;
 		}
 
-		private static int GetVal(MatIndexer<Vec3b> labels, int y, int x)
+		private static int GetVal(MatIndexer<byte> labels, int y, int x)
 		{
 			// OpenCV does not validate index.
 			// It does a buffer overflow. (read current pixel and next 2 pixels in the array in grayscale mode)
@@ -1021,9 +1053,9 @@ namespace ICRExtraction
 			// The boxes are better centered.
 			
 			return (
-				labels[y, x - 1].Item0 |
-				labels[y, x].Item0 |
-				labels[y, x + 1].Item0);
+				labels[y, x - 1] |
+				labels[y, x] |
+				labels[y, x + 1]);
 		}
 
 		private static Random Random = new Random();
