@@ -20,27 +20,18 @@ namespace ICRExtractionConsoleApp
 			using (var state = new ThreadLocal<FormExtractionHandle>(NativeFormExtraction.CreateFormExtraction))
 			{
 				GC.Collect();
+				List<string> pathFiles = GetSamplesAndCleanUpResults();
 
-				var projectDir = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName;
-				var pathFiles = Directory.EnumerateFiles(
-					projectDir + Path.DirectorySeparatorChar + @"..\.." + Path.DirectorySeparatorChar + "Samples")
-					.ToList();
+				// For testing:
+				pathFiles = pathFiles.Where(m => m.Contains("form9")).ToList();
 
-				var resultDir = projectDir + Path.DirectorySeparatorChar + @"..\Results";
-				if (!Directory.Exists(resultDir))
-				{
-					Directory.CreateDirectory(resultDir);
-				}
-				foreach (var pathFile in Directory.EnumerateFiles(resultDir))
-				{
-					File.Delete(pathFile);
-				}
+				int numThread = 1; // Environment.ProcessorCount;
+				var showDebugImage = true; // If true, you may want to use: numThread = 1.
 
-				int numThread = Environment.ProcessorCount;
 				Parallel.ForEach(pathFiles, new ParallelOptions { MaxDegreeOfParallelism = numThread }, pathFile =>
 				{
 					FormExtractionHandle handle = state.Value;
-					var showDebugImage = false;
+
 					NativeFormExtraction.SetOptions(handle, 800, 25, 15, 5, 20000, 50000, showDebugImage);
 
 					var resizeWidth = 800;
@@ -83,7 +74,7 @@ namespace ICRExtractionConsoleApp
 					if (showDebugImage)
 					{
 						var debugImg = NativeFormExtraction.GetDebugImage(handle, row * col);
-						
+
 						var img = CreateImage(debugImg, row, col, hasColor: true);
 						Cv2.BitwiseOr(newImage, img, newImage);
 
@@ -113,6 +104,24 @@ namespace ICRExtractionConsoleApp
 
 			Console.WriteLine("End");
 			Console.ReadLine();
+		}
+
+		private static List<string> GetSamplesAndCleanUpResults()
+		{
+			var projectDir = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName;
+			var pathFiles = Directory.EnumerateFiles(
+				projectDir + Path.DirectorySeparatorChar + @"..\.." + Path.DirectorySeparatorChar + "Samples")
+				.ToList();
+			var resultDir = projectDir + Path.DirectorySeparatorChar + @"..\Results";
+			if (!Directory.Exists(resultDir))
+			{
+				Directory.CreateDirectory(resultDir);
+			}
+			foreach (var pathFile in Directory.EnumerateFiles(resultDir))
+			{
+				File.Delete(pathFile);
+			}
+			return pathFiles;
 		}
 
 		private static Random Random = new Random();

@@ -43,16 +43,16 @@ void FormExtraction::DrawJunction(int colorCode, Junction* junction, int row)
 
 	if (top)
 		for (int i = 0; i < numTop; i++)
-			this->DebugImg[y + x * row] = colorCode;
+			this->DebugImg[y - i + x * row] = colorCode;
 	if (bottom)
 		for (int i = 0; i < numBottom; i++)
-			this->DebugImg[y + x * row] = colorCode;
+			this->DebugImg[y + i + x * row] = colorCode;
 	if (right)
 		for (int i = 0; i < numRight; i++)
-			this->DebugImg[y + x * row] = colorCode;
+			this->DebugImg[y + (x + i) * row] = colorCode;
 	if (left)
 		for (int i = 0; i < numLeft; i++)
-			this->DebugImg[y + x * row] = colorCode;
+			this->DebugImg[y + (x - i) * row] = colorCode;
 }
 
 int FormExtraction::HasBoxes(int* imgData, int row, int col)
