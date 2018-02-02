@@ -25,7 +25,14 @@ FormExtraction::~FormExtraction()
 
 int FormExtraction::RunFormExtraction(int* imgData, int row, int col)
 {
-	return this->HasBoxes(imgData, row, col);
+	try
+	{
+		return this->HasBoxes(imgData, row, col);
+	}
+	catch (const std::exception& ex)
+	{
+		return 1;
+	}
 }
 
 void FormExtraction::DrawJunction(int colorCode, Junction* junction, int row)
@@ -94,14 +101,14 @@ int FormExtraction::HasBoxes(int* imgData, int row, int col)
 
 	for (int y = 1; y < row - 1; y++)
 	{
-		list<Junction*>* listJunctionX = new list<Junction*>();
+		auto listJunctionX = new list<Junction*>();
 		allListJunction.push_back(listJunctionX);
 
 		int proximityCounter = 0;
 
 		for (int x = 1; x < col - 1; x++)
 		{
-			Junction* junction = GetJunction(imgData, row, col, height, width, y, x);
+			auto junction = GetJunction(imgData, row, col, height, width, y, x);
 			if (junction != NULL)
 			{
 				allJunctions.push_front(junction);

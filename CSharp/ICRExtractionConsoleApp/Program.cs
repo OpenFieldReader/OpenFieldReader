@@ -68,6 +68,10 @@ namespace ICRExtractionConsoleApp
 							imgData[y + x * row] = indexer[y, x];
 
 					var result = NativeFormExtraction.RunFormExtraction(handle, imgData, row, col);
+					if (result != 0)
+					{
+						throw new Exception("Unknown error occured with the function: RunFormExtraction");
+					}
 					watch.Stop();
 					Console.WriteLine("Duration: " + watch.Elapsed);
 
