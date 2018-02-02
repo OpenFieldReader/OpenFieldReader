@@ -89,10 +89,14 @@ int FormExtraction::HasBoxes(int* imgData, int row, int col)
 	// We must ignore it to prevent wasting CPU and spend too much time.
 	int maxProximity = 10;
 
-	list<Junction*>* lastListJunctionX = NULL;
+	list<Junction*> allJunctions;
+	list<list<Junction*>*> allListJunction;
+
 	for (int y = 1; y < row - 1; y++)
 	{
 		list<Junction*>* listJunctionX = new list<Junction*>();
+		allListJunction.push_back(listJunctionX);
+
 		int proximityCounter = 0;
 
 		for (int x = 1; x < col - 1; x++)
@@ -100,6 +104,7 @@ int FormExtraction::HasBoxes(int* imgData, int row, int col)
 			Junction* junction = GetJunction(imgData, row, col, height, width, y, x);
 			if (junction != NULL)
 			{
+				allJunctions.push_front(junction);
 				listJunctionX->push_front(junction);
 				proximityCounter++;
 			}
@@ -112,15 +117,24 @@ int FormExtraction::HasBoxes(int* imgData, int row, int col)
 						if (cacheListJunctionPerLine.find(y) == cacheListJunctionPerLine.end())
 						{
 							// Not found.
-							cacheListJunctionPerLine.insert(pair<int, list<Junction*>*>(y, new list<Junction*>()));
+							auto newListJunctionX = new list<Junction*>();
+							allListJunction.push_back(newListJunctionX);
+							cacheListJunctionPerLine.insert(pair<int, list<Junction*>*>(y, newListJunctionX));
 						}
 
+						auto cacheListJunction = cacheListJunctionPerLine.at(y);
+						
 						for each (auto junction in *listJunctionX)
 						{
-							cacheListJunctionPerLine.insert(pair<int, list<Junction*>*>(y, listJunctionX));
+							cacheListJunction->push_back(junction);
 							listJunction.push_back(junction);
 							listJunctionX = new list<Junction*>();
+							allListJunction.push_back(listJunctionX);
 						}
+					}
+					else
+					{
+						listJunctionX->clear();
 					}
 				}
 				proximityCounter = 0;
@@ -132,7 +146,9 @@ int FormExtraction::HasBoxes(int* imgData, int row, int col)
 			if (cacheListJunctionPerLine.find(y) == cacheListJunctionPerLine.end())
 			{
 				// Not found.
-				cacheListJunctionPerLine.insert(pair<int, list<Junction*>*>(y, new list<Junction*>()));
+				auto newListJunctionX = new list<Junction*>();
+				allListJunction.push_back(newListJunctionX);
+				cacheListJunctionPerLine.insert(pair<int, list<Junction*>*>(y, newListJunctionX));
 			}
 
 			for each (auto junction in *listJunctionX)
@@ -140,15 +156,9 @@ int FormExtraction::HasBoxes(int* imgData, int row, int col)
 				cacheListJunctionPerLine.insert(pair<int, list<Junction*>*>(y, listJunctionX));
 				listJunction.push_back(junction);
 				listJunctionX = new list<Junction*>();
+				allListJunction.push_back(listJunctionX);
 			}
 		}
-		lastListJunctionX = listJunctionX;
-	}
-
-	if (lastListJunctionX != NULL)
-	{
-		// The remaining list is not used.
-		delete lastListJunctionX;
 	}
 
 	cout << "Junction.count: " << listJunction.size() << endl;
@@ -162,13 +172,12 @@ int FormExtraction::HasBoxes(int* imgData, int row, int col)
 	}
 
 	// Dispose.
-	for each (auto junction in listJunction)
+	for each (auto junction in allJunctions)
 	{
 		delete junction;
 	}
-	for each (auto entry in cacheListJunctionPerLine)
+	for each (auto listJunction in allListJunction)
 	{
-		list<Junction*>* listJunction = entry.second;
 		delete listJunction;
 	}
 

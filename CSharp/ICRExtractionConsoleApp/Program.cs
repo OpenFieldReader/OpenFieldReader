@@ -15,8 +15,12 @@ namespace ICRExtractionConsoleApp
 	{
 		static void Main(string[] args)
 		{
+			// Used to check memory leak
+			//for (int i = 0; i < 1000; i++)
 			using (var state = new ThreadLocal<FormExtractionHandle>(NativeFormExtraction.CreateFormExtraction))
 			{
+				GC.Collect();
+
 				var projectDir = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName;
 				var pathFiles = Directory.EnumerateFiles(
 					projectDir + Path.DirectorySeparatorChar + @"..\.." + Path.DirectorySeparatorChar + "Samples")
@@ -32,10 +36,11 @@ namespace ICRExtractionConsoleApp
 					File.Delete(pathFile);
 				}
 
-				foreach (var pathFile in pathFiles)
+				int numThread = Environment.ProcessorCount;
+				Parallel.ForEach(pathFiles, new ParallelOptions { MaxDegreeOfParallelism = numThread }, pathFile =>
 				{
 					FormExtractionHandle handle = state.Value;
-					var showDebugImage = true;
+					var showDebugImage = false;
 					NativeFormExtraction.SetOptions(handle, 800, 25, 15, 5, 20000, 50000, showDebugImage);
 
 					var resizeWidth = 800;
@@ -103,7 +108,7 @@ namespace ICRExtractionConsoleApp
 					image.Dispose();
 					newImage.Dispose();
 					mat.Dispose();
-				}
+				});
 			}
 
 			Console.WriteLine("End");
