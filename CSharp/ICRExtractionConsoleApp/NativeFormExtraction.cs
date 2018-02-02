@@ -7,13 +7,13 @@ using System.Text;
 
 namespace ICRExtractionCore
 {
-    public class NativeFormExtraction
-    {
+	public class NativeFormExtraction
+	{
 		private const string DllFilePath = "ICRExtractionCpp.dll";
-		
+
 		[DllImport(DllFilePath, CallingConvention = CallingConvention.Cdecl)]
 		public extern static FormExtractionHandle CreateFormExtraction();
-		
+
 		[DllImport(DllFilePath, CallingConvention = CallingConvention.Cdecl)]
 		public extern static void SetOptions(
 			FormExtractionHandle obj,
@@ -26,8 +26,18 @@ namespace ICRExtractionCore
 			bool showDebugImage);
 
 		[DllImport(DllFilePath, CallingConvention = CallingConvention.Cdecl)]
-		public extern static int RunFormExtraction(FormExtractionHandle obj);
-		
+		public extern static int RunFormExtraction(FormExtractionHandle obj, int[] imgData, int row, int col);
+
+		[DllImport(DllFilePath, CallingConvention = CallingConvention.Cdecl)]
+		private extern static IntPtr GetDebugImage(FormExtractionHandle obj);
+
+		public static int[] GetDebugImage(FormExtractionHandle obj, int size)
+		{
+			int[] destination = new int[size];
+			Marshal.Copy(GetDebugImage(obj), destination, 0, size);
+			return destination;
+		}
+
 		[DllImport(DllFilePath, CallingConvention = CallingConvention.Cdecl)]
 		public extern static int ReleaseFormExtraction(IntPtr obj);
 	}

@@ -149,9 +149,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="FormExtraction.h" />
+    <ClInclude Include="Junction.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FormExtraction.cpp" />
+    <ClCompile Include="Junction.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

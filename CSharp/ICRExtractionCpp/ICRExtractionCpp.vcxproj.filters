@@ -18,9 +18,15 @@
     <ClInclude Include="FormExtraction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Junction.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FormExtraction.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Junction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
