@@ -313,7 +313,7 @@ namespace ICRExtraction
 			// Cache per line speed up the creation of various cache.
 			Dictionary<int, List<Junction>> cacheListJunctionPerLine = new Dictionary<int, List<Junction>>();
 			List<Junction> listJunction = new List<Junction>();
-
+			
 			// If there is too much junction near each other, maybe it's just a black spot.
 			// We must ignore it to prevent wasting CPU and spend too much time.
 			int maxProximity = 10;
@@ -422,21 +422,22 @@ namespace ICRExtraction
 				cachePossibleNextJunctionLeft.Add(id, possibleNextJunction.Where(m => m.X < junction.X).ToArray());
 				cachePossibleNextJunctionRight.Add(id, possibleNextJunction.Where(m => m.X > junction.X).ToArray());
 			}
-
+			
 			int numSol = 0;
 
 			List<Line> possibleSol = new List<Line>();
 
 			// We use a dictionary here because we need a fast way to remove entry.
 			// We reduce computation and we also merge solutions.
-			var elements = listJunction.OrderBy(m => m.Y).ToDictionary(m => m, m => m);
-			
+			var elements = listJunction.OrderBy(m => m.Y).ToDictionary(m => m.X | m.Y << 16, m => m);
+
 			int skipSol = 0;
 			while (elements.Any())
 			{
-				var start = elements.First().Key;
-				elements.Remove(start);
+				var start = elements.First().Value;
+				elements.Remove(start.X | start.Y << 16);
 
+				Dictionary<int, List<int>> usedJunctionsForGapX = new Dictionary<int, List<int>>();
 				List<Line> listSolutions = new List<Line>();
 				var junctionsForGap = cacheNearJunction[start.X | start.Y << 16];
 
@@ -459,7 +460,9 @@ namespace ICRExtraction
 					}
 
 					// We will reduce list of solution by checking if the solution is already found.
-					if (listSolutions.Any(m => Math.Abs(m.GapX - gapX) < 2 && m.Junctions.Contains(start)))
+					//if (listSolutions.Any(m => Math.Abs(m.GapX - gapX) < 2 && m.Junctions.Contains(start)))
+					if (usedJunctionsForGapX.ContainsKey(gap.X | gap.Y << 16) &&
+						usedJunctionsForGapX[gap.X | gap.Y << 16].Any(m => Math.Abs(m - gapX) < 10))
 					{
 						skipSol++;
 						continue;
@@ -493,6 +496,20 @@ namespace ICRExtraction
 							GapX = gapX,
 							Junctions = curSolution.ToArray()
 						});
+						foreach (var item in curSolution)
+						{
+							List<int> listGapX;
+							if (!usedJunctionsForGapX.ContainsKey(item.X | item.Y << 16))
+							{
+								listGapX = new List<int>();
+								usedJunctionsForGapX.Add(item.X | item.Y << 16, listGapX);
+							}
+							else
+							{
+								listGapX = usedJunctionsForGapX[item.X | item.Y << 16];
+							}
+							listGapX.Add(gapX);
+						}
 					}
 				}
 
@@ -504,7 +521,7 @@ namespace ICRExtraction
 					// But, we have more solutions.
 					foreach (var item in bestSol.Junctions)
 					{
-						elements.Remove(item);
+						elements.Remove(item.X | item.Y << 16);
 					}
 
 					possibleSol.Add(bestSol);
@@ -517,7 +534,7 @@ namespace ICRExtraction
 
 			// Let's merge near junctions. (vertical line)
 			// We assign a group id for each clusters.
-
+			
 			Dictionary<int, int> junctionToGroupId = new Dictionary<int, int>();
 
 			int nextGroupId = 1;
@@ -578,11 +595,11 @@ namespace ICRExtraction
 					}
 				}
 			}
-
-			Dictionary<int, List<Junction>> junctionsPerGroup = possibleSol
+			
+			Dictionary<int, Junction[]> junctionsPerGroup = possibleSol
 				.SelectMany(m => m.Junctions)
 				.GroupBy(m => m.GroupId)
-				.ToDictionary(m => m.Key, m => m.ToList());
+				.ToDictionary(m => m.Key, m => m.ToArray());
 
 			// Let's explore the clusters directions and try to interconnect clusters on the horizontal side.
 
@@ -594,7 +611,7 @@ namespace ICRExtraction
 			foreach (var item in junctionsPerGroup)
 			{
 				int groupId = item.Key;
-				Junction[] junctions = item.Value.ToArray();
+				Junction[] junctions = item.Value;
 
 				int minElementDir = minElementPercent * junctions.Length / 100;
 
@@ -627,7 +644,7 @@ namespace ICRExtraction
 			Dictionary<LineCluster, LineCluster> lineClustersBottom = new Dictionary<LineCluster, LineCluster>();
 
 			Dictionary<LineCluster, float> cacheGapX = new Dictionary<LineCluster, float>();
-
+			
 			// Merge top and bottom lines.
 			foreach (var itemA in lineClusters)
 			{
@@ -645,8 +662,7 @@ namespace ICRExtraction
 								continue;
 							if (lineClustersBottom.ContainsKey(bottomLine))
 								continue;
-
-
+							
 							if (!cacheGapX.ContainsKey(itemA))
 								cacheGapX.Add(itemA, itemA.Junctions.Average(m => m.GapX));
 							if (!cacheGapX.ContainsKey(itemB))
@@ -656,12 +672,18 @@ namespace ICRExtraction
 							var secondGapX = cacheGapX[itemB];
 
 							// GapX should be similar. Otherwise, just ignore it.
-							if (Math.Abs(firstGapX - secondGapX) <= 2 && Math.Abs(itemA.X - itemB.X) < 200 && Math.Abs(itemA.Y - itemB.Y) < 200)
+							if (Math.Abs(firstGapX - secondGapX) <= 2 && Math.Abs(itemA.X - itemB.X) < 200)
 							{
 								var avgGapX = (firstGapX + secondGapX) / 2;
 
 								var minGapY = Math.Max(10, avgGapX - 5);
 								var maxGapY = avgGapX + 5;
+								
+								int diffY = topLine.Y - bottomLine.Y;
+								if (diffY >= maxGapY && diffY < minGapY)
+								{
+									continue;
+								}
 
 								// For the majority of element on top line, we should be able to interconnect
 								// with the other line.
@@ -677,9 +699,11 @@ namespace ICRExtraction
 								foreach (var topJunction in topLine.Junctions)
 								{
 									var commonElement = bottomLine.Junctions.Where(m =>
-										Math.Abs(topJunction.X - m.X) <= 5 &&
-										topJunction.Y - m.Y >= minGapY &&
-										topJunction.Y - m.Y <= maxGapY
+										Math.Abs(topJunction.X - m.X) <= 5
+
+										// Not necessary.
+										//&& topJunction.Y - m.Y >= minGapY
+										//&& topJunction.Y - m.Y <= maxGapY
 									);
 									if (commonElement.Any())
 									{
@@ -984,8 +1008,8 @@ namespace ICRExtraction
 				for (int iNext = 0; iNext < remainingList.Count; iNext++)
 				{
 					var cur = remainingList[iNext];
-					int curX = cur.X;
-					int curY = cur.Y;
+					var curX = cur.X;
+					var curY = cur.Y;
 
 					int distX = Math.Abs(x + gapX - curX);
 					if (distX <= 0)
