@@ -60,23 +60,24 @@ namespace ICRExtraction
 							{
 								using (var subImg = new Mat(image, new Rect(xTopLeft, yTopLeft, estimatedWidth, estimatedHeight)))
 								{
-									MatOfByte3 mat3 = new MatOfByte3(subImg);
-									MatIndexer<Vec3b> indexer = mat3.GetIndexer();
-
-									int borderPixelX = 0;
-									int borderPixelY = 0;
+									int borderPixelX = 4;
+									int borderPixelY = 4;
 									var minY = Math.Min(borderPixelX, subImg.Height);
 									var maxY = Math.Max(0, subImg.Height - borderPixelX);
 									var minX = Math.Min(borderPixelX, subImg.Width);
 									var maxX = Math.Max(0, subImg.Width - borderPixelY);
 
-									Cv2.Resize(subImg, subImg, new Size(28, 28));
-									Cv2.Threshold(subImg, subImg, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
+									// TODO: parameters
+									//Cv2.Resize(subImg, subImg, new Size(28, 28));
+									//Cv2.Threshold(subImg, subImg, 0, 255, ThresholdTypes.Otsu | ThresholdTypes.Binary);
 
 									var outputFilename = filename + "_g-" + groupId + "_n-" + characterNum;
 
 									if (removeEmptyBoxes)
 									{
+										MatOfByte3 mat3 = new MatOfByte3(subImg);
+										MatIndexer<Vec3b> indexer = mat3.GetIndexer();
+
 										// Basic empty box detection.
 										int whitePixelCounter = 0;
 										int pixelCounter = 0;
@@ -150,7 +151,7 @@ namespace ICRExtraction
 				// These values can be changed.
 
 				// Minimum boxes per group.
-				MinNumElements = 7;
+				MinNumElements = 4;
 
 				// These properties prevent wasting CPU on complex image.
 				MaxJunctions = 20000;
@@ -678,14 +679,14 @@ namespace ICRExtraction
 								var avgGapX = (firstGapX + secondGapX) / 2;
 
 								var minGapY = Math.Max(10, avgGapX - 5);
-								var maxGapY = avgGapX + 5;
+								var maxGapY = Math.Min(50, avgGapX + 5);
 								
 								int diffY = topLine.Y - bottomLine.Y;
 								if (diffY >= maxGapY && diffY < minGapY)
 								{
 									continue;
 								}
-
+								
 								// For the majority of element on top line, we should be able to interconnect
 								// with the other line.
 
@@ -712,10 +713,8 @@ namespace ICRExtraction
 								{
 									var commonElement = bottomLineJunctions.Where(m =>
 										Math.Abs(topJunction.X - m.X) <= 5
-
-										// Not necessary.
-										//&& topJunction.Y - m.Y >= minGapY
-										//&& topJunction.Y - m.Y <= maxGapY
+										&& topJunction.Y - m.Y >= minGapY
+										&& topJunction.Y - m.Y <= maxGapY
 									);
 									if (commonElement.Any())
 									{
@@ -754,7 +753,8 @@ namespace ICRExtraction
 			foreach (var boxesCluster in boxesClusters)
 			{
 				// We will explore points horizontally.
-				var allPoints = boxesCluster.TopLine.Junctions.Union(boxesCluster.BottomLine.Junctions).Select(m => m.X)
+				var allPoints = boxesCluster.TopLine.Junctions.Union(boxesCluster.BottomLine.Junctions)
+					.Select(m => m.X)
 					.OrderBy(m => m)
 					.ToList();
 
