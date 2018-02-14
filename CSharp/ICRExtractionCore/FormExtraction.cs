@@ -150,7 +150,7 @@ namespace ICRExtraction
 				// These values can be changed.
 
 				// Minimum boxes per group.
-				MinNumElements = 5;
+				MinNumElements = 7;
 
 				// These properties prevent wasting CPU on complex image.
 				MaxJunctions = 20000;
@@ -427,10 +427,11 @@ namespace ICRExtraction
 
 			List<Line> possibleSol = new List<Line>();
 
+			
 			// We use a dictionary here because we need a fast way to remove entry.
 			// We reduce computation and we also merge solutions.
 			var elements = listJunction.OrderBy(m => m.Y).ToDictionary(m => m.X | m.Y << 16, m => m);
-
+			
 			int skipSol = 0;
 			while (elements.Any())
 			{
@@ -467,7 +468,7 @@ namespace ICRExtraction
 						skipSol++;
 						continue;
 					}
-
+					
 					List<Junction> curSolution = new List<Junction>();
 					curSolution.Add(start);
 
@@ -489,7 +490,7 @@ namespace ICRExtraction
 								ReturnCode = 30
 							};
 						}
-
+						
 						numSol++;
 						listSolutions.Add(new Line
 						{
@@ -527,16 +528,16 @@ namespace ICRExtraction
 					possibleSol.Add(bestSol);
 				}
 			}
-
+			
 			//Console.WriteLine("Skip: " + skipSol);
 			//Console.WriteLine(numSol + " : Solution found");
 			//Console.WriteLine(possibleSol.Count + " Best solution found");
 
 			// Let's merge near junctions. (vertical line)
 			// We assign a group id for each clusters.
-			
-			Dictionary<int, int> junctionToGroupId = new Dictionary<int, int>();
 
+			Dictionary<int, int> junctionToGroupId = new Dictionary<int, int>();
+			
 			int nextGroupId = 1;
 			foreach (var curSolution in possibleSol)
 			{
@@ -1007,68 +1008,32 @@ namespace ICRExtraction
 			int numElements = 0;
 			var x = start.X;
 			var y = start.Y;
-			List<Junction> remainingList = new List<Junction>();
-			remainingList.AddRange(cacheNearJunction[gap.X | gap.Y << 16]);
-			while (remainingList.Any())
+			Junction[] remainingList = cacheNearJunction[gap.X | gap.Y << 16];
+			
+			// We prefer a distX of 0.
+
+			for (int iNext = 0; iNext < remainingList.Length; iNext++)
 			{
-				// Find which element is next one.
-				int indexNextElement = -1;
+				var cur = remainingList[iNext];
+				var curX = cur.X;
+				var curY = cur.Y;
 
-				// We prefer a distX of 0.
-
-				for (int iNext = 0; iNext < remainingList.Count; iNext++)
+				int distX = Math.Abs(x + gapX - curX);
+				if (distX <= 0)
 				{
-					var cur = remainingList[iNext];
-					var curX = cur.X;
-					var curY = cur.Y;
+					numElements++;
+					curSolution.Add(cur);
 
-					int distX = Math.Abs(x + gapX - curX);
-					if (distX <= 0)
-					{
-						indexNextElement = iNext;
-						iNext--;
-						numElements++;
-						remainingList.Clear();
-						remainingList.AddRange(cacheNearJunction[cur.X | cur.Y << 16]);
-						x = curX;
-						y = curY;
+					remainingList = cacheNearJunction[cur.X | cur.Y << 16];
+					x = curX;
+					y = curY;
 
-						curSolution.Add(cur);
-						break;
-					}
-				}
-				if (indexNextElement == -1)
-				{
-					// Let's try with distX = 1
-					/*for (int iNext = 0; iNext < remainingList.Count; iNext++)
-					{
-						var cur = remainingList[iNext];
-						int curX = cur.X;
-						int curY = cur.Y;
-
-						int distX = Math.Abs(x + gapX - curX);
-
-						if (distX <= 1)
-						{
-							indexNextElement = iNext;
-							iNext--;
-							numElements++;
-							remainingList.Clear();
-							remainingList.AddRange(cacheNearJunction[cur]);
-							x = curX;
-							y = curY;
-
-							curSolution.Add(cur);
-							break;
-						}
-					}*/
-				}
-				if (indexNextElement == -1)
-				{
-					// No element found.
-					return numElements;
+					iNext = -1;
+					continue;
 				}
 			}
+
+			// No element found or the end.
 			return numElements;
 		}
 
