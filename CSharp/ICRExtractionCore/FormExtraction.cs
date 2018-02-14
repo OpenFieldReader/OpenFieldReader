@@ -691,14 +691,25 @@ namespace ICRExtraction
 								// Must have some common element next to each other.
 								int commonElementCounter = 0;
 
-								int minPercent = 90;
-								int minCount = Math.Min(topLine.Junctions.Length, bottomLine.Junctions.Length);
-								int minimumCommonElements = minCount * minPercent / 100;
+								int groupGapX = Math.Max(5, (int)avgGapX - 5);
+								
+								// We reduce required computation.
+								// We will consider only some elements on the junctions.
+								List<Junction> topLineJunctions = topLine.Junctions.GroupBy(m => (m.X / groupGapX))
+									.Select(m => m.FirstOrDefault())
+									.ToList();
+								List<Junction> bottomLineJunctions = bottomLine.Junctions.GroupBy(m => (m.X / groupGapX))
+									.Select(m => m.FirstOrDefault())
+									.ToList();
 
+								int minPercent = 80;
+								int minCount = Math.Min(topLineJunctions.Count, bottomLineJunctions.Count);
+								int minimumCommonElements = minCount * minPercent / 100;
+								
 								List<float> avgGapY = new List<float>();
-								foreach (var topJunction in topLine.Junctions)
+								foreach (var topJunction in topLineJunctions)
 								{
-									var commonElement = bottomLine.Junctions.Where(m =>
+									var commonElement = bottomLineJunctions.Where(m =>
 										Math.Abs(topJunction.X - m.X) <= 5
 
 										// Not necessary.
@@ -938,7 +949,7 @@ namespace ICRExtraction
 			{
 				finalResult.DebugImg = debugImg;
 			}
-
+			
 			return finalResult;
 		}
 
