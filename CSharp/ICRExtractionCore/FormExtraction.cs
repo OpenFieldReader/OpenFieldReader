@@ -214,7 +214,7 @@ namespace ICRExtraction
 			result.Duration = watch.Elapsed;
 			
 			// Preview
-			if (result.Boxes.Any() && image.Width != 0 && options.ShowDebugImage)
+			if (result.Boxes != null && result.Boxes.Any() && image.Width != 0 && options.ShowDebugImage)
 			{
 				var img = CreateImage(result.DebugImg, hasColor: true);
 				Cv2.BitwiseOr(newImage, img, newImage);
