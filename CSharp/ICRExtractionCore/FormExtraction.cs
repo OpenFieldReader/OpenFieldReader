@@ -28,11 +28,13 @@ namespace ICRExtraction
 				{
 					Cv2.AdaptiveThreshold(image, image, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, 9, 4);
 
-					// TODO: we should not resize. (keep maximum quality)
+					var ratioWidth = 1.0;
+					var ratioHeight = 1.0;
 					if (image.Width > 800)
 					{
-						var height = 800 * image.Height / image.Width;
-						Cv2.Resize(image, image, new Size(800, height));
+						var height = 800.0 * image.Height / image.Width;
+						ratioWidth = image.Width / 800.0;
+						ratioHeight = image.Height / height;
 					}
 
 					// You may want to use ".OrderBy(m => m.Min(x => x.TopLeft.Y)).Take(1)" to select the first box on top.
@@ -58,7 +60,11 @@ namespace ICRExtraction
 
 							try
 							{
-								using (var subImg = new Mat(image, new Rect(xTopLeft, yTopLeft, estimatedWidth, estimatedHeight)))
+								using (var subImg = new Mat(image, new Rect(
+									(int)(xTopLeft * ratioWidth),
+									(int)(yTopLeft * ratioHeight),
+									(int)(estimatedWidth * ratioWidth),
+									(int)(estimatedHeight * ratioHeight))))
 								{
 									int borderPixelX = 4;
 									int borderPixelY = 4;
