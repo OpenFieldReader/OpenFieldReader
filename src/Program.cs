@@ -1,17 +1,16 @@
 ﻿using CommandLine;
-using ICRExtraction;
 using SixLabors.ImageSharp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace FindBoxes
+namespace OpenFieldReader
 {
 	class Program
     {
         static void Main(string[] args)
 		{
-			Parser.Default.ParseArguments<FormExtractionOptions>(args)
+			Parser.Default.ParseArguments<OpenFieldReaderOptions>(args)
 				.WithParsed(opts => Run(opts))
 				.WithNotParsed(errs => HandleErrors(errs));
 		}
@@ -22,7 +21,7 @@ namespace FindBoxes
 			return 1;
 		}
 		
-		private static void Run(FormExtractionOptions options)
+		private static void Run(OpenFieldReaderOptions options)
 		{
 			try
 			{
@@ -40,7 +39,7 @@ namespace FindBoxes
 						}
 					}
 
-					var result = FormExtraction.FindBoxes(imgData, row, col, options);
+					var result = OpenFieldReader.FindBoxes(imgData, row, col, options);
 
 					if (result.ReturnCode != 0)
 					{
