@@ -40,6 +40,9 @@ namespace OpenFieldReader
 
 		[Option("output", Default = "std", HelpText = "Output type (std or path file)")]
 		public string Output { get; set; }
+
+		[Option("verbose", Default = "std", HelpText = "Verbose")]
+		public bool Verbose { get; set; }
 	}
 
 	public class OpenFieldReader
@@ -195,7 +198,10 @@ namespace OpenFieldReader
 				}
 			}
 			
-			// Console.WriteLine("Junction.count: " + listJunction.Count);
+			if (options.Verbose)
+			{
+				Console.WriteLine("Junction.count: " + listJunction.Count);
+			}
 
 			if (listJunction.Count >= options.MaxJunctions)
 			{
@@ -355,9 +361,12 @@ namespace OpenFieldReader
 				}
 			}
 			
-			//Console.WriteLine("Skip: " + skipSol);
-			//Console.WriteLine(numSol + " : Solution found");
-			//Console.WriteLine(possibleSol.Count + " Best solution found");
+
+			if (options.Verbose) {
+				Console.WriteLine("Skip solutions counter: " + skipSol);
+				Console.WriteLine(numSol + " : Solution found");
+				Console.WriteLine(possibleSol.Count + " : Best solution found");
+			}
 
 			// Let's merge near junctions. (vertical line)
 			// We assign a group id for each clusters.

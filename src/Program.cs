@@ -43,6 +43,9 @@ namespace OpenFieldReader
 
 					if (result.ReturnCode != 0)
 					{
+						if (options.Verbose) {
+							Console.WriteLine("Exit with code: " + result.ReturnCode);
+						}
 						Environment.Exit(result.ReturnCode);
 					}
 					
