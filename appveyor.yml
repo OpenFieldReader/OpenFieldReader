@@ -1,0 +1,12 @@
+version: '1.0.{build}'
+image: ubuntu
+branches:
+  only:
+  - master
+before_build:
+  # Display .NET Core version
+  - cmd: dotnet --version
+after_build:
+  - cmd: cd package && bash create-package.sh
+artifacts:
+ - path: 'package/openfieldreader-ubuntu.16.04-x64'
