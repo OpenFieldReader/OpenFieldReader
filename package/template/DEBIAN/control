@@ -1,0 +1,9 @@
+Package: openfieldreader
+Version: 1.0.0
+Section: base
+Priority: optional
+Architecture: all
+Depends: bash
+Maintainer: Philip Doxakis
+Description: Automatically detect paper-based form fields.
+Homepage: https://github.com/OpenFieldReader/OpenFieldReader

@@ -1,6 +1,6 @@
 # OpenFieldReader
 
-Automatically detect paper-based form fields. 
+Automatically detect paper-based form fields.
 
 It only focuses on paper-based forms. Because handwriting text represents valuable data. They can help automatically detect entities involved. Printed characters can be processed by tesseract 4.
 
