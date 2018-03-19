@@ -266,3 +266,6 @@ CSharp/ICRExtraction/Results/
 
 CSharp/Results
 
+src/Properties
+
+.DS_Store
