@@ -15,6 +15,10 @@ We recommend to:
 - use the python wrapper. (Include preprocessing, noise reduction, image resizing to support different resolutions, etc.)
 - scan at a resolution of 300dpi for best results
 
+It can be used for other purpose as well.
+For example, it can extract cells from a sudoku grid.
+If you think about it, you can see it as 9 fields with 9 characters each.
+
 # Segmentation methods
 
 We only support joined frame.
