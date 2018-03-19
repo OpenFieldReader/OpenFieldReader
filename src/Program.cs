@@ -2,7 +2,9 @@
 using SixLabors.ImageSharp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using Utf8Json;
 
 namespace OpenFieldReader
 {
@@ -25,67 +27,81 @@ namespace OpenFieldReader
 		{
 			try
 			{
-				using (Image<Rgba32> image = Image.Load<Rgba32>(options.InputFile))
+				using (var image = Image.Load(options.InputFile))
 				{
-					int row = image.Width;
-					int col = image.Height;
-					int[] imgData = new int[row * col];
-					for (int y = 0; y < row; y++)
+					try
 					{
-						for (int x = 0; x < col; x++)
+						int row = image.Height;
+						int col = image.Width;
+						
+						int[] imgData = new int[row * col];
+						for (int y = 0; y < row; y++)
 						{
-							int val = image[x, y].R | image[x, y].B | image[x, y].G;
-							imgData[y + x * row] = val < 122 ? 0 : 255;
-						}
-					}
-
-					var result = OpenFieldReader.FindBoxes(imgData, row, col, options);
-
-					if (result.ReturnCode != 0)
-					{
-						if (options.Verbose) {
-							Console.WriteLine("Exit with code: " + result.ReturnCode);
-						}
-						Environment.Exit(result.ReturnCode);
-					}
-					
-					if (options.Output == "std")
-					{
-						// Show result on the console.
-
-						Console.WriteLine("Boxes: " + result.Boxes.Count);
-						Console.WriteLine("Duration: " + result.Duration);
-						Console.WriteLine();
-
-						int iBox = 1;
-						foreach (var box in result.Boxes)
-						{
-							Console.WriteLine("Box #" + iBox);
-
-							foreach (var element in box)
+							for (int x = 0; x < col; x++)
 							{
-								Console.WriteLine("  Element: " +
-									element.TopLeft + "; " +
-									element.TopRight + "; " +
-									element.BottomRight + "; " +
-									element.BottomLeft);
+								var pixel = image[x, y];
+								var val = pixel.R | pixel.G | pixel.B;
+								imgData[y + x * row] = val < 122 ? 0 : 255;
 							}
+						}
 
-							iBox++;
+						var result = OpenFieldReader.FindBoxes(imgData, row, col, options);
+
+						if (result.ReturnCode != 0)
+						{
+							if (options.Verbose) {
+								Console.WriteLine("Exit with code: " + result.ReturnCode);
+							}
+							Environment.Exit(result.ReturnCode);
+						}
+
+						if (options.OutputFile == "std")
+						{
+							// Show result on the console.
+
+							Console.WriteLine("Boxes: " + result.Boxes.Count);
+							Console.WriteLine();
+
+							int iBox = 1;
+							foreach (var box in result.Boxes)
+							{
+								Console.WriteLine("Box #" + iBox);
+
+								foreach (var element in box)
+								{
+									Console.WriteLine("  Element: " +
+										element.TopLeft + "; " +
+										element.TopRight + "; " +
+										element.BottomRight + "; " +
+										element.BottomLeft);
+								}
+
+								iBox++;
+							}
+							Console.WriteLine("Press any key to continue...");
+							Console.ReadLine();
+						}
+						else
+						{
+							// Write result to output file.
+							var outputPath = options.OutputFile;
+							var json = JsonSerializer.ToJsonString(result);
+							File.WriteAllText(outputPath, json);
 						}
 					}
-					else
+					catch (Exception ex)
 					{
-						// Write result to output file.
-						var outputPath = options.Output;
-
-						throw new NotImplementedException();
+						Console.WriteLine("File: " + options.InputFile);
+						Console.WriteLine("Something wrong happen: " + ex.Message + Environment.NewLine + ex.StackTrace);
+						Environment.Exit(3);
 					}
 				}
 			}
 			catch (Exception ex)
 			{
+				Console.WriteLine("File: " + options.InputFile);
 				Console.WriteLine("Something wrong happen: " + ex.Message + Environment.NewLine + ex.StackTrace);
+				Environment.Exit(2);
 			}
 		}
 	}

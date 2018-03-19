@@ -1,9 +1,11 @@
 ﻿using CommandLine;
+using SixLabors.ImageSharp;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace OpenFieldReader
 {
@@ -39,9 +41,9 @@ namespace OpenFieldReader
 		// Output.
 
 		[Option("output", Default = "std", HelpText = "Output type (std or path file)")]
-		public string Output { get; set; }
+		public string OutputFile { get; set; }
 
-		[Option("verbose", Default = "std", HelpText = "Verbose")]
+		[Option("verbose", Default = false, HelpText = "Verbose")]
 		public bool Verbose { get; set; }
 	}
 
@@ -50,9 +52,7 @@ namespace OpenFieldReader
 		public class OpenFieldReaderResult
 		{
 			public int ReturnCode { get; set; }
-			public int[,] DebugImg { get; set; }
 			public List<List<Box>> Boxes { get; set; }
-			public TimeSpan Duration { get; set; }
 		}
 		
 		public struct Point
@@ -129,7 +129,7 @@ namespace OpenFieldReader
 					for (int x = 0; x < col; x++)
 						debugImg[y, x] = 0;
 			}
-
+			
 			// We are seaching for pattern!
 			// We look for junctions.
 			// This will help us make a decision.
@@ -219,9 +219,12 @@ namespace OpenFieldReader
 
 			// Search near same line.
 
+			// TODO: should be parameters. (Can speed up process if you know what you are looking for.)
+			int minX = 15; // Min estimated cell width (should not be less than 15.)
+			int maxX = 80; // Max estimated cell width (should not be greater than 85. Most of the time, it can be reduced to 50 or 60.)
+			int variationY = 3; // Variation of y to find next cell. (should be really small for faster result)
+			
 			// Prepare cache to speedup searching algo.
-			int minX = 10;
-			int maxX = 70;
 			Dictionary<int, Junction[]> cacheNearJunction = new Dictionary<int, Junction[]>();
 			Dictionary<int, Junction[]> cachePossibleNextJunctionRight = new Dictionary<int, Junction[]>();
 			Dictionary<int, Junction[]> cachePossibleNextJunctionLeft = new Dictionary<int, Junction[]>();
@@ -229,7 +232,7 @@ namespace OpenFieldReader
 			{
 				var listJunctionNearJunction = new List<Junction>();
 
-				for (int deltaY = -3; deltaY <= 3; deltaY++)
+				for (int deltaY = -variationY; deltaY <= variationY; deltaY++)
 				{
 					if (cacheListJunctionPerLine.ContainsKey(junction.Y - deltaY))
 						listJunctionNearJunction.AddRange(cacheListJunctionPerLine[junction.Y - deltaY]);
@@ -287,11 +290,11 @@ namespace OpenFieldReader
 					}*/
 
 					var gapX = Math.Abs(gap.X - start.X);
-					if (gapX <= 15 || gapX > 50)
+					if (gapX <= minX || gapX > maxX)
 					{
 						continue;
 					}
-
+					
 					// We will reduce list of solution by checking if the solution is already found.
 					//if (listSolutions.Any(m => Math.Abs(m.GapX - gapX) < 2 && m.Junctions.Contains(start)))
 					if (usedJunctionsForGapX.ContainsKey(gap.X | gap.Y << 16) &&
@@ -513,7 +516,7 @@ namespace OpenFieldReader
 								var avgGapX = (firstGapX + secondGapX) / 2;
 
 								var minGapY = Math.Max(10, avgGapX - 5);
-								var maxGapY = Math.Min(50, avgGapX + 5);
+								var maxGapY = Math.Min(maxX, avgGapX + 5);
 								
 								int diffY = topLine.Y - bottomLine.Y;
 								if (diffY >= maxGapY && diffY < minGapY)
@@ -528,17 +531,19 @@ namespace OpenFieldReader
 								int commonElementCounter = 0;
 
 								int groupGapX = Math.Max(5, (int)avgGapX - 5);
-								
+
+								int numberOfElements = 5;
+
 								// We reduce required computation.
 								// We will consider only some elements on the junctions.
 								List<Junction> topLineJunctions = topLine.Junctions.GroupBy(m => (m.X / groupGapX))
-									.Select(m => m.FirstOrDefault())
+									.SelectMany(m => m.Take(numberOfElements))
 									.ToList();
 								List<Junction> bottomLineJunctions = bottomLine.Junctions.GroupBy(m => (m.X / groupGapX))
-									.Select(m => m.FirstOrDefault())
+									.SelectMany(m => m.Take(numberOfElements))
 									.ToList();
 
-								int minPercent = 80;
+								int minPercent = 70;
 								int minCount = Math.Min(topLineJunctions.Count, bottomLineJunctions.Count);
 								int minimumCommonElements = minCount * minPercent / 100;
 								
@@ -724,26 +729,19 @@ namespace OpenFieldReader
 				var isValid = true;
 				var curBoxes = allBoxes[i];
 
-				if (allBoxes.Count < 2)
+				var minWidth = curBoxes.Min(m =>
+					((m.TopRight.X + m.BottomRight.X) / 2) - ((m.TopLeft.X + m.BottomLeft.X) / 2));
+				var minHeight = curBoxes.Min(m =>
+					((m.BottomRight.Y + m.BottomLeft.Y) / 2) - ((m.TopRight.Y + m.TopLeft.Y) / 2));
+				var maxWidth = curBoxes.Max(m =>
+					((m.TopRight.X + m.BottomRight.X) / 2) - ((m.TopLeft.X + m.BottomLeft.X) / 2));
+				var maxHeight = curBoxes.Max(m =>
+					((m.BottomRight.Y + m.BottomLeft.Y) / 2) - ((m.TopRight.Y + m.TopLeft.Y) / 2));
+
+				// If the width and height are too different, we should not consider the boxes.
+				if (maxWidth - minWidth > 7 || maxHeight - minHeight > 5)
 				{
 					isValid = false;
-				}
-				else
-				{
-					var minWidth = curBoxes.Min(m =>
-						((m.TopRight.X + m.BottomRight.X) / 2) - ((m.TopLeft.X + m.BottomLeft.X) / 2));
-					var minHeight = curBoxes.Min(m =>
-						((m.BottomRight.Y + m.BottomLeft.Y) / 2) - ((m.TopRight.Y + m.TopLeft.Y) / 2));
-					var maxWidth = curBoxes.Max(m =>
-						((m.TopRight.X + m.BottomRight.X) / 2) - ((m.TopLeft.X + m.BottomLeft.X) / 2));
-					var maxHeight = curBoxes.Max(m =>
-						((m.BottomRight.Y + m.BottomLeft.Y) / 2) - ((m.TopRight.Y + m.TopLeft.Y) / 2));
-
-					// If the width and height are too different, we should not consider the boxes.
-					if (maxWidth - minWidth > 7 || maxHeight - minHeight > 5)
-					{
-						isValid = false;
-					}
 				}
 
 				if (!isValid)
@@ -782,7 +780,23 @@ namespace OpenFieldReader
 
 			if (options.GenerateDebugImage)
 			{
-				finalResult.DebugImg = debugImg;
+				using (var image = new Image<Rgba32>(col, row))
+				{
+					AssignColor(debugImg, true);
+
+					for (int y = 0; y < row; y++)
+					{
+						for (int x = 0; x < col; x++)
+						{
+							int val = debugImg[y, x];
+							byte r = (byte)(~((val >> 16) & 0xFF));
+							byte g = (byte)(~((val >> 8) & 0xFF));
+							byte b = (byte)(~((val) & 0xFF));
+							image[x, y] = new Rgba32(r, g, b);
+						}
+					}
+					image.Save("debug.jpg");
+				}
 			}
 			
 			return finalResult;
@@ -842,7 +856,7 @@ namespace OpenFieldReader
 			int numElements = 0;
 			var x = start.X;
 			var y = start.Y;
-			Junction[] remainingList = cacheNearJunction[gap.X | gap.Y << 16];
+			Junction[] remainingList = cacheNearJunction[start.X | start.Y << 16];
 			
 			// We prefer a distX of 0.
 
@@ -853,6 +867,9 @@ namespace OpenFieldReader
 				var curY = cur.Y;
 
 				int distX = Math.Abs(x + gapX - curX);
+
+				// TODO: should be a parameter
+				// If you use dilatation, it should be distX == 0. (faster)
 				if (distX <= 0)
 				{
 					numElements++;
@@ -874,7 +891,7 @@ namespace OpenFieldReader
 		private static Junction? GetJunction(int[] imgData, int row, int col, int height, int width, int y, int x)
 		{
 			var val = GetVal(imgData, y, x, row);
-			if (0 < val)
+			if (0 == val)
 			{
 				// Let's explore the directions.
 
@@ -965,7 +982,10 @@ namespace OpenFieldReader
 							if (!cacheColor.ContainsKey(val))
 							{
 								// Generate a random color
-								color = (122 + Random.Next(123)) << 16 | (122 + Random.Next(123)) << 8 | (122 + Random.Next(123));
+								color =
+									(255 - Random.Next(70, 200)) << 16 |
+									(255 - Random.Next(100, 225)) << 8 |
+									(255 - Random.Next(100, 230));
 								cacheColor.Add(val, color);
 							}
 							else
