@@ -1,5 +1,4 @@
 # OpenFieldReader
-
 Automatically detect paper-based form fields.
 
 It only focuses on paper-based forms. Because handwriting text represents valuable data. They can help automatically detect entities involved. Printed characters can be processed by tesseract 4.
@@ -20,7 +19,6 @@ For example, it can extract cells from a sudoku grid.
 If you think about it, you can see it as 9 fields with 9 characters each.
 
 # Segmentation methods
-
 We only support joined frame.
 
 <p align="center">
