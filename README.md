@@ -52,7 +52,7 @@ The algorithm run a ICR cell-detection analysis. So, no need to define a templat
 
 We recommend to:
 
-- use the python wrapper. (Include preprocessing, noise reduction, image resizing to support different resolutions, etc.)
+- run preprocessing, noise reduction, image resizing to support different resolutions, etc.
 - scan at a resolution of 300dpi for best results
 
 It can be used for other purpose as well.
