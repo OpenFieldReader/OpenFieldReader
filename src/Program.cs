@@ -41,7 +41,7 @@ namespace OpenFieldReader
 							{
 								var pixel = image[x, y];
 								var val = pixel.R | pixel.G | pixel.B;
-								imgData[y + x * row] = val < 122 ? 0 : 255;
+								imgData[y + x * row] = val > 122 ? 0 : 255;
 							}
 						}
 

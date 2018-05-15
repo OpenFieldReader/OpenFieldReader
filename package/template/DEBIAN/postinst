@@ -1,4 +1,2 @@
-sudo chown -R root:root /usr/bin/openfieldreader
-sudo chown -R root:root /usr/bin/openfieldreaderbin/
-sudo chmod +x /usr/bin/openfieldreader
-sudo chmod +x /usr/bin/openfieldreaderbin/OpenFieldReader
+chown -R root:root /usr/bin/openfieldreader
+chown -R root:root /usr/bin/openfieldreaderbin/

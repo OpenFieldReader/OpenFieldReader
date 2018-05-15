@@ -891,7 +891,7 @@ namespace OpenFieldReader
 		private static Junction? GetJunction(int[] imgData, int row, int col, int height, int width, int y, int x)
 		{
 			var val = GetVal(imgData, y, x, row);
-			if (0 == val)
+			if (0 < val)
 			{
 				// Let's explore the directions.
 
