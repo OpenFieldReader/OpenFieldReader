@@ -3,7 +3,7 @@
 # To support different ubuntu version check: https://docs.microsoft.com/en-us/dotnet/core/rid-catalog
 # And you must also change in demo.csproj the value for RuntimeIdentifiers
 
-targets=( ubuntu.14.04-x64 ubuntu.16.04-x64 ubuntu.16.10-x64 ubuntu.18.04-x64 )
+targets=( ubuntu.14.04-x64 ubuntu.16.04-x64 ubuntu.16.10-x64 )
 
 # Remove previous packages.
 rm -rf *.deb
